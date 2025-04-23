@@ -13,6 +13,8 @@ type app interface {
 	Close() error
 }
 
+// Тут это, конечно, не совсем main app
+// Это больше сущность для группировки аппов, если нужно будет
 type mainApp struct {
 	runners []*appRunner
 	logger  *slog.Logger
