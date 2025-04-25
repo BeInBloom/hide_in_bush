@@ -7,12 +7,21 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/BeInBloom/hide_in_bush/internal/models"
 	orderservice "github.com/BeInBloom/hide_in_bush/internal/services/order_service"
 	"github.com/BeInBloom/hide_in_bush/internal/storage"
-	"github.com/xeipuuv/gojsonschema"
+	jsonvalidator "github.com/BeInBloom/hide_in_bush/internal/validator/json_validator"
+	"github.com/shopspring/decimal"
 )
+
+type validator interface {
+	Validate(data []byte) (bool, error)
+	Report() []string
+}
+
+var _ validator = (*jsonvalidator.Validator)(nil)
 
 type (
 	userService interface {
@@ -37,18 +46,28 @@ type (
 	}
 )
 
-type handlers struct {
+type Handlers struct {
 	userService       userService
 	authService       authService
 	orderService      orderService
 	withdrawalService withdrawalService
 }
 
-func NewHandlers() *handlers {
-	return &handlers{}
+func New(
+	userService userService,
+	authService authService,
+	orderService orderService,
+	withdrawalService withdrawalService,
+) *Handlers {
+	return &Handlers{
+		userService:       userService,
+		authService:       authService,
+		orderService:      orderService,
+		withdrawalService: withdrawalService,
+	}
 }
 
-func (h *handlers) RegisterUserHandler() http.HandlerFunc {
+func (h *Handlers) RegisterUserHandler() http.HandlerFunc {
 	const userCredentialsSchema = `{
 		"$schema": "http://json-schema.org/draft-07/schema#",
 		"type": "object",
@@ -68,7 +87,7 @@ func (h *handlers) RegisterUserHandler() http.HandlerFunc {
 			}
 		}
 	}`
-	schemaLoader := gojsonschema.NewStringLoader(userCredentialsSchema)
+	validator := jsonvalidator.New(userCredentialsSchema)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -87,9 +106,7 @@ func (h *handlers) RegisterUserHandler() http.HandlerFunc {
 		}
 		defer r.Body.Close()
 
-		documentLoader := gojsonschema.NewBytesLoader(body)
-		result, err := gojsonschema.Validate(schemaLoader, documentLoader)
-		if err != nil {
+		if ok, err := validator.Validate(body); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 
 			errResponse := models.RegisterResponse{
@@ -99,22 +116,16 @@ func (h *handlers) RegisterUserHandler() http.HandlerFunc {
 
 			json.NewEncoder(w).Encode(errResponse)
 			return
-		}
+		} else if !ok {
+			errors := validator.Report()
 
-		if !result.Valid() {
-			var errors []string
-			for _, err := range result.Errors() {
-				errors = append(errors, err.String())
-			}
-
-			w.WriteHeader(http.StatusBadRequest)
-
-			errorResponse := models.RegisterResponse{
+			errResponse := models.RegisterResponse{
 				Status: "error",
 				Errors: errors,
 			}
 
-			json.NewEncoder(w).Encode(errorResponse)
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(errResponse)
 			return
 		}
 
@@ -145,7 +156,14 @@ func (h *handlers) RegisterUserHandler() http.HandlerFunc {
 				return
 			}
 
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			w.WriteHeader(http.StatusInternalServerError)
+
+			errResponse := models.RegisterResponse{
+				Status: "error",
+				Errors: []string{"internal server error"},
+			}
+
+			json.NewEncoder(w).Encode(errResponse)
 			return
 		}
 
@@ -173,7 +191,7 @@ func (h *handlers) RegisterUserHandler() http.HandlerFunc {
 	}
 }
 
-func (h *handlers) LoginUserHandler() http.HandlerFunc {
+func (h *Handlers) LoginUserHandler() http.HandlerFunc {
 	const userCredentialsSchema = `{
 		"$schema": "http://json-schema.org/draft-07/schema#",
 		"type": "object",
@@ -193,7 +211,7 @@ func (h *handlers) LoginUserHandler() http.HandlerFunc {
 			}
 		}
 	}`
-	schemaLoader := gojsonschema.NewStringLoader(userCredentialsSchema)
+	validator := jsonvalidator.New(userCredentialsSchema)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -212,26 +230,20 @@ func (h *handlers) LoginUserHandler() http.HandlerFunc {
 		}
 		defer r.Body.Close()
 
-		documentLoader := gojsonschema.NewBytesLoader(body)
-		result, err := gojsonschema.Validate(schemaLoader, documentLoader)
-		if err != nil {
+		if ok, err := validator.Validate(body); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			errResponse := models.LoginResponse{
+
+			errResponse := models.RegisterResponse{
 				Status: "error",
 				Errors: []string{"internal server error"},
 			}
 
 			json.NewEncoder(w).Encode(errResponse)
 			return
-		}
+		} else if !ok {
+			errors := validator.Report()
 
-		if !result.Valid() {
-			var errors []string
-			for _, err := range result.Errors() {
-				errors = append(errors, err.String())
-			}
-
-			errResponse := models.LoginResponse{
+			errResponse := models.RegisterResponse{
 				Status: "error",
 				Errors: errors,
 			}
@@ -302,7 +314,7 @@ func (h *handlers) LoginUserHandler() http.HandlerFunc {
 	}
 }
 
-func (h *handlers) UploadOrderHandler() http.HandlerFunc {
+func (h *Handlers) UploadOrderHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -407,11 +419,11 @@ func (h *handlers) UploadOrderHandler() http.HandlerFunc {
 	}
 }
 
-func (h *handlers) GetUserOrdersHandler() http.HandlerFunc {
+func (h *Handlers) GetUserOrdersHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		token := w.Header().Get("Authorization")
+		token := r.Header.Get("Authorization")
 
 		userID, err := h.authService.ParseToken(token)
 		if err != nil {
@@ -430,15 +442,15 @@ func (h *handlers) GetUserOrdersHandler() http.HandlerFunc {
 			return
 		}
 
-		json.NewEncoder(w).Encode(orders)
-
 		w.WriteHeader(http.StatusOK)
+
+		json.NewEncoder(w).Encode(orders)
 	}
 }
 
-func (h *handlers) GetUserBalanceHandler() http.HandlerFunc {
+func (h *Handlers) GetUserBalanceHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		r.Header.Get("Authorization")
 
 		token := r.Header.Get("Authorization")
 
@@ -487,7 +499,7 @@ func (h *handlers) GetUserBalanceHandler() http.HandlerFunc {
 	}
 }
 
-func (h *handlers) WithdrawPointsHandler() http.HandlerFunc {
+func (h *Handlers) WithdrawPointsHandler() http.HandlerFunc {
 	const (
 		withdrawalSchema = `{
 			"$schema": "http://json-schema.org/draft-07/schema#",
@@ -506,8 +518,7 @@ func (h *handlers) WithdrawPointsHandler() http.HandlerFunc {
 			}
 		}`
 	)
-	schemaLoader := gojsonschema.NewStringLoader(withdrawalSchema)
-
+	validator := jsonvalidator.New(withdrawalSchema)
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -525,34 +536,26 @@ func (h *handlers) WithdrawPointsHandler() http.HandlerFunc {
 		}
 		defer r.Body.Close()
 
-		documentLoader := gojsonschema.NewBytesLoader(body)
-		result, err := gojsonschema.Validate(schemaLoader, documentLoader)
-		if err != nil {
+		if ok, err := validator.Validate(body); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 
-			errResponse := models.WithdrawalsPointsResponse{
+			errResponse := models.RegisterResponse{
 				Status: "error",
 				Errors: []string{"internal server error"},
 			}
 
 			json.NewEncoder(w).Encode(errResponse)
 			return
-		}
+		} else if !ok {
+			errors := validator.Report()
 
-		if !result.Valid() {
-			var errors []string
-			for _, err := range result.Errors() {
-				errors = append(errors, err.String())
-			}
-
-			w.WriteHeader(http.StatusBadRequest)
-
-			errorResponse := models.WithdrawalsPointsResponse{
+			errResponse := models.RegisterResponse{
 				Status: "error",
 				Errors: errors,
 			}
 
-			json.NewEncoder(w).Encode(errorResponse)
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(errResponse)
 			return
 		}
 
@@ -570,8 +573,9 @@ func (h *handlers) WithdrawPointsHandler() http.HandlerFunc {
 		}
 
 		wd := models.Withdrawal{
-			Order: withdrawalRequest.Order,
-			Sum:   withdrawalRequest.Sum,
+			Order:       withdrawalRequest.Order,
+			Sum:         decimal.NewFromInt(withdrawalRequest.Sum),
+			ProcessedAt: time.Now(),
 		}
 		if err := h.withdrawalService.PostWithdraw(wd); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -595,8 +599,45 @@ func (h *handlers) WithdrawPointsHandler() http.HandlerFunc {
 	}
 }
 
-func (h *handlers) GetWithdrawalsHandler() http.HandlerFunc {
+func (h *Handlers) GetWithdrawalsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		panic("implement me")
+		w.Header().Set("Content-Type", "application/json")
+
+		token := r.Header.Get("Authorization")
+
+		userID, err := h.authService.ParseToken(token)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+
+			errResponse := models.WithdrawalsPointsResponse{
+				Status: "error",
+				Errors: []string{"internal server error"},
+			}
+
+			json.NewEncoder(w).Encode(errResponse)
+			return
+		}
+
+		withdrawals, err := h.withdrawalService.GetUserWithdrawals(userID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+
+			errResponse := models.WithdrawalsPointsResponse{
+				Status: "error",
+				Errors: []string{"internal server error"},
+			}
+
+			json.NewEncoder(w).Encode(errResponse)
+			return
+		}
+
+		if len(withdrawals) == 0 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+
+		json.NewEncoder(w).Encode(withdrawals)
 	}
 }

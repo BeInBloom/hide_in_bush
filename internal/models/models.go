@@ -2,6 +2,7 @@ package models
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/shopspring/decimal"
@@ -35,7 +36,7 @@ type (
 
 	WithdrawalRequest struct {
 		Order string `json:"order"`
-		Sum   int    `json:"sum"`
+		Sum   int64  `json:"sum"`
 	}
 )
 
@@ -73,6 +74,12 @@ type (
 		Status string   `json:"status"`
 		Errors []string `json:"errors,omitempty"`
 	}
+
+	GetWithdrawalsResponse struct {
+		Status      string       `json:"status"`
+		Withdrawals []Withdrawal `json:"withdrawals,omitempty"`
+		Errors      []string     `json:"errors,omitempty"`
+	}
 )
 
 type (
@@ -91,8 +98,9 @@ type (
 	}
 
 	Withdrawal struct {
-		Order string `json:"order"`
-		Sum   int    `json:"sum"`
+		Order       string          `json:"order"`
+		Sum         decimal.Decimal `json:"sum"`
+		ProcessedAt time.Time       `json:"processed_at"`
 	}
 )
 
