@@ -5,8 +5,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BeInBloom/hide_in_bush/internal/validator"
+	jsonvalidator "github.com/BeInBloom/hide_in_bush/internal/validator/json_validator"
+	lunavallidator "github.com/BeInBloom/hide_in_bush/internal/validator/luna_vallidator"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/cors"
 )
 
 const (
@@ -14,7 +18,68 @@ const (
 	throttleLimit = 100
 )
 
-type chiMiddleware = func(next http.Handler) http.Handler
+const (
+	registerScheme = `{
+		"$schema": "http://json-schema.org/draft-07/schema#",
+		"type": "object",
+		"required": ["login", "password"],
+		"additionalProperties": false,
+		"properties": {
+			"login": {
+				"type": "string",
+				"minLength": 3,
+				"maxLength": 50,
+				"pattern": "^[a-zA-Z0-9_-]+$"
+			},
+			"password": {
+				"type": "string",
+				"minLength": 4,
+				"maxLength": 100
+			}
+		}
+	}`
+
+	loginScheme = `{
+		"$schema": "http://json-schema.org/draft-07/schema#",
+		"type": "object",
+		"required": ["login", "password"],
+		"additionalProperties": false,
+		"properties": {
+			"login": {
+				"type": "string",
+				"minLength": 3,
+				"maxLength": 50,
+				"pattern": "^[a-zA-Z0-9_-]+$"
+			},
+			"password": {
+				"type": "string",
+				"minLength": 4,
+				"maxLength": 100
+			}
+		}
+	}`
+
+	withdrawScheme = `{
+		"$schema": "http://json-schema.org/draft-07/schema#",
+		"type": "object",
+		"required": ["order", "sum"],
+		"additionalProperties": false,
+		"properties": {
+			"order": {
+				"type": "string",
+				"minLength": 1
+			},
+			"sum": {
+				"type": "integer",
+				"minimum": 1
+			}
+		}
+	}`
+)
+
+type (
+	chiMiddleware = func(next http.Handler) http.Handler
+)
 
 type (
 	handlerBuilder interface {
@@ -30,6 +95,7 @@ type (
 	middlewaresBuilder interface {
 		Auth() chiMiddleware
 		Logger() chiMiddleware
+		BodyValidator(v validator.Validator[[]byte]) chiMiddleware
 	}
 )
 
@@ -40,7 +106,9 @@ type routerBuilder struct {
 	once        sync.Once
 }
 
-func New(handlers handlerBuilder, middlewares middlewaresBuilder) *routerBuilder {
+func New(
+	handlers handlerBuilder, middlewares middlewaresBuilder,
+) *routerBuilder {
 	return &routerBuilder{
 		handlers:    handlers,
 		middlewares: middlewares,
@@ -57,19 +125,30 @@ func (rb *routerBuilder) Build() chi.Router {
 }
 
 func (rb *routerBuilder) setRoutes() {
+	var (
+		loginJSONValidator     = jsonvalidator.New(loginScheme)
+		registerJSONValidator  = jsonvalidator.New(registerScheme)
+		withdrawJSONValidator  = jsonvalidator.New(withdrawScheme)
+		algorithmLunaValidator = lunavallidator.New()
+	)
+
 	rb.router.Route("/api", func(r chi.Router) {
 		r.Route("/user", func(r chi.Router) {
-			r.Post("/register", rb.handlers.RegisterUserHandler())
-			r.Post("/login", rb.handlers.LoginUserHandler())
+			r.With(middleware.AllowContentType("application/json"), rb.middlewares.BodyValidator(registerJSONValidator)).
+				Post("/register", rb.handlers.RegisterUserHandler())
+			r.With(middleware.AllowContentType("application/json"), rb.middlewares.BodyValidator(loginJSONValidator)).
+				Post("/login", rb.handlers.LoginUserHandler())
 
 			r.Group(func(r chi.Router) {
 				r.Use(rb.middlewares.Auth())
 
-				r.Post("/orders", rb.handlers.UploadOrderHandler())
+				r.With(middleware.AllowContentType("application/json"), rb.middlewares.BodyValidator(algorithmLunaValidator)).
+					Post("/orders", rb.handlers.UploadOrderHandler())
 				r.Get("/orders", rb.handlers.GetUserOrdersHandler())
 
 				r.Get("/balance", rb.handlers.GetUserBalanceHandler())
-				r.Post("/balance/withdraw", rb.handlers.WithdrawPointsHandler())
+				r.With(middleware.AllowContentType("application/json"), rb.middlewares.BodyValidator(withdrawJSONValidator)).
+					Post("/balance/withdraw", rb.handlers.WithdrawPointsHandler())
 
 				r.Get("/withdrawals", rb.handlers.GetWithdrawalsHandler())
 			})
@@ -90,4 +169,17 @@ func (rb *routerBuilder) setMiddlewares() {
 	rb.router.Use(middleware.Timeout(timeout))
 
 	rb.router.Use(compressor.Handler)
+
+	rb.router.Use(cors.Handler(cors.Options{
+		AllowedOrigins: []string{"https://*", "http://*"},
+		AllowedMethods: []string{"GET", "POST"},
+		AllowedHeaders: []string{
+			"Accept", "Authorization",
+			"Content-Type", "Content-Encoding",
+			"X-Requested-With", "X-Forwarded-For", "X-Real-IP",
+		},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 }

@@ -8,32 +8,36 @@ var (
 	ErrNoValidatorsProvided = errors.New("no validators provided")
 )
 
-type validator[T any] interface {
+type ValidatorInput interface {
+	~[]byte | ~int | string
+}
+
+type Validator[T ValidatorInput] interface {
 	Validate(data T) (bool, error)
 	Report() []string
 }
 
 type (
-	compositeValidator[T any] struct {
-		validators []validator[T]
+	compositeValidator[T ValidatorInput] struct {
+		validators []Validator[T]
 		failures   []string
 	}
 
-	anyValidator[T any] struct {
+	anyValidator[T ValidatorInput] struct {
 		compositeValidator[T]
 	}
 
-	allValidator[T any] struct {
+	allValidator[T ValidatorInput] struct {
 		compositeValidator[T]
 	}
 
-	NotValidator[T any] struct {
-		validator validator[T]
+	NotValidator[T ValidatorInput] struct {
+		validator Validator[T]
 		failure   []string
 	}
 )
 
-func NewAny[T any](validators ...validator[T]) *anyValidator[T] {
+func NewAny[T ValidatorInput](validators ...Validator[T]) *anyValidator[T] {
 	return &anyValidator[T]{
 		compositeValidator[T]{
 			validators: validators,
@@ -41,7 +45,7 @@ func NewAny[T any](validators ...validator[T]) *anyValidator[T] {
 	}
 }
 
-func NewAll[T any](validators ...validator[T]) *allValidator[T] {
+func NewAll[T ValidatorInput](validators ...Validator[T]) *allValidator[T] {
 	return &allValidator[T]{
 		compositeValidator[T]{
 			validators: validators,
@@ -49,7 +53,7 @@ func NewAll[T any](validators ...validator[T]) *allValidator[T] {
 	}
 }
 
-func NewNot[T any](v validator[T]) *NotValidator[T] {
+func NewNot[T ValidatorInput](v Validator[T]) *NotValidator[T] {
 	return &NotValidator[T]{
 		validator: v,
 	}

@@ -80,10 +80,25 @@ type (
 		Withdrawals []Withdrawal `json:"withdrawals,omitempty"`
 		Errors      []string     `json:"errors,omitempty"`
 	}
+
+	ErrorResponse struct {
+		Status string   `json:"status"`
+		Errors []string `json:"errors,omitempty"`
+	}
 )
 
 type (
-	User struct{}
+	User struct {
+		//В целом, не понятно, что там за юзер по заданию,
+		//По этому пусть будет такая заглушка
+		ID        string    `json:"id"`
+		Login     string    `json:"login"`
+		Password  string    `json:"password"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Orders    []Order   `json:"orders"`
+		Balance   Balance   `json:"balance"`
+	}
 
 	Order struct {
 		ID       string          `json:"number"`
@@ -109,5 +124,8 @@ type (
 		Logger *slog.Logger
 		Addr   string
 		Router chi.Router
+	}
+
+	LogConfig struct {
 	}
 )

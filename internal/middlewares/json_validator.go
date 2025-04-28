@@ -1,0 +1,34 @@
+package middlewares
+
+import (
+	"io"
+	"net/http"
+
+	"github.com/BeInBloom/hide_in_bush/internal/validator"
+)
+
+func (m *Mw) BodyValidator(v validator.Validator[[]byte]) chiMiddleware {
+	return func(next http.Handler) http.Handler {
+		logger := m.logger.With("middleware", "validator")
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			data, err := io.ReadAll(r.Body)
+			if err != nil {
+				logger.Error("Failed to read request body", "error", err)
+				m.handleJSONError(
+					w, http.StatusBadRequest, "Failed to read request body")
+				return
+			}
+
+			if ok, err := v.Validate(data); err != nil {
+				m.handleJSONError(w, http.StatusBadRequest, v.Report()...)
+				return
+			} else if !ok {
+				logger.Error("Request body is invalid", "error", v.Report())
+				m.handleJSONError(w, http.StatusBadRequest, "Request body is invalid")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}

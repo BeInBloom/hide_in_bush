@@ -6,8 +6,8 @@ import (
 
 	"github.com/BeInBloom/hide_in_bush/internal/handlers"
 	"github.com/BeInBloom/hide_in_bush/internal/logger"
+	"github.com/BeInBloom/hide_in_bush/internal/middlewares"
 	"github.com/BeInBloom/hide_in_bush/internal/models"
-	"github.com/BeInBloom/hide_in_bush/internal/router"
 	"github.com/go-chi/chi"
 )
 
@@ -61,7 +61,7 @@ type container struct {
 	cfg         models.Config
 	lg          *slog.Logger
 	handlers    *handlers.Handlers
-	middlewares middlewaresBuilder
+	middlewares *middlewares.Mw
 }
 
 func New(cfg models.Config) *container {
@@ -84,7 +84,7 @@ func (c *container) Handlers() *handlers.Handlers {
 	return c.handlers
 }
 
-func (c *container) Middleware() middlewaresBuilder {
+func (c *container) Middleware() *middlewares.Mw {
 	if c.middlewares == nil {
 		panic("implement me")
 	}
@@ -94,7 +94,7 @@ func (c *container) Middleware() middlewaresBuilder {
 
 func (c *container) Router() chi.Router {
 	if c.router == nil {
-		c.router = router.New(c.Handlers(), c.Middleware())
+		// c.router = router.New(c.Handlers(), c.Middleware())
 	}
 
 	return c.router.Build()

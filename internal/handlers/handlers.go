@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -68,115 +67,36 @@ func New(
 }
 
 func (h *Handlers) RegisterUserHandler() http.HandlerFunc {
-	const userCredentialsSchema = `{
-		"$schema": "http://json-schema.org/draft-07/schema#",
-		"type": "object",
-		"required": ["login", "password"],
-		"additionalProperties": false,
-		"properties": {
-			"login": {
-				"type": "string",
-				"minLength": 3,
-				"maxLength": 50,
-				"pattern": "^[a-zA-Z0-9_-]+$"
-			},
-			"password": {
-				"type": "string",
-				"minLength": 4,
-				"maxLength": 100
-			}
-		}
-	}`
-	validator := jsonvalidator.New(userCredentialsSchema)
-
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-
-			errResponse := models.RegisterResponse{
-				Status: "error",
-				Errors: []string{"Body error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusBadRequest, "body error")
 			return
 		}
 		defer r.Body.Close()
 
-		if ok, err := validator.Validate(body); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-
-			errResponse := models.RegisterResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
-			return
-		} else if !ok {
-			errors := validator.Report()
-
-			errResponse := models.RegisterResponse{
-				Status: "error",
-				Errors: errors,
-			}
-
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(errResponse)
-			return
-		}
-
 		var credentials models.UserCredentials
 		if err := json.Unmarshal(body, &credentials); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-
-			errResponse := models.RegisterResponse{
-				Status: "error",
-				Errors: []string{"bad request: invalid JSON format"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusBadRequest, "bad request: invalid JSON format")
 			return
 		}
 
 		userID, err := h.userService.Register(credentials)
 		if err != nil {
-			if err == storage.ErrUserAlreadyExists {
-				w.WriteHeader(http.StatusConflict)
-
-				errResponse := models.RegisterResponse{
-					Status: "error",
-					Errors: []string{"user already exists"},
-				}
-
-				json.NewEncoder(w).Encode(errResponse)
+			if errors.Is(err, storage.ErrUserAlreadyExists) {
+				h.handleJSONError(w, http.StatusConflict, "user already exists")
 				return
 			}
 
-			w.WriteHeader(http.StatusInternalServerError)
-
-			errResponse := models.RegisterResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
 		token, err := h.authService.GenerateToken(userID)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-
-			errResponse := models.RegisterResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -192,114 +112,36 @@ func (h *Handlers) RegisterUserHandler() http.HandlerFunc {
 }
 
 func (h *Handlers) LoginUserHandler() http.HandlerFunc {
-	const userCredentialsSchema = `{
-		"$schema": "http://json-schema.org/draft-07/schema#",
-		"type": "object",
-		"required": ["login", "password"],
-		"additionalProperties": false,
-		"properties": {
-			"login": {
-				"type": "string",
-				"minLength": 3,
-				"maxLength": 50,
-				"pattern": "^[a-zA-Z0-9_-]+$"
-			},
-			"password": {
-				"type": "string",
-				"minLength": 4,
-				"maxLength": 100
-			}
-		}
-	}`
-	validator := jsonvalidator.New(userCredentialsSchema)
-
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-
-			errResponse := models.LoginResponse{
-				Status: "error",
-				Errors: []string{"body error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusBadRequest, "body error")
 			return
 		}
 		defer r.Body.Close()
 
-		if ok, err := validator.Validate(body); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-
-			errResponse := models.RegisterResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
-			return
-		} else if !ok {
-			errors := validator.Report()
-
-			errResponse := models.RegisterResponse{
-				Status: "error",
-				Errors: errors,
-			}
-
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(errResponse)
-			return
-		}
-
 		var credentials models.UserCredentials
 		if err := json.Unmarshal(body, &credentials); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-
-			errResponse := models.LoginResponse{
-				Status: "error",
-				Errors: []string{"bad request: invalid JSON format"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusBadRequest, "bad request: invalid JSON format")
 			return
 		}
 
 		userID, err := h.userService.ValidateCredentials(credentials)
 		if err != nil {
-			if err == storage.ErrInvalidCredentials {
-				w.WriteHeader(http.StatusUnauthorized)
-
-				errResponse := models.LoginResponse{
-					Status: "error",
-					Errors: []string{"invalid credentials"},
-				}
-
-				json.NewEncoder(w).Encode(errResponse)
+			if errors.Is(err, storage.ErrUserNotFound) {
+				h.handleJSONError(w, http.StatusNotFound, "user not found")
 				return
 			}
-			w.WriteHeader(http.StatusInternalServerError)
 
-			errResponse := models.LoginResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusUnauthorized, "invalid credentials")
 			return
 		}
 
 		token, err := h.authService.GenerateToken(userID)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-
-			errResponse := models.LoginResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -322,57 +164,18 @@ func (h *Handlers) UploadOrderHandler() http.HandlerFunc {
 
 		userID, err := h.authService.ParseToken(token)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-
-			errResponse := models.OrdersPostResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-
-			errResponse := models.OrdersPostResponse{
-				Status: "error",
-				Errors: []string{"body error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusBadRequest, "body error")
 			return
 		}
 		defer r.Body.Close()
 
 		orderString := strings.TrimSpace(string(body))
-
-		order, err := strconv.Atoi(orderString)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-
-			errResponse := models.OrdersPostResponse{
-				Status: "error",
-				Errors: []string{"invalid order format"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
-			return
-		}
-
-		if !isValidLuna(order) {
-			w.WriteHeader(http.StatusUnprocessableEntity)
-
-			errResponse := models.OrdersPostResponse{
-				Status: "error",
-				Errors: []string{"not Luna order number"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
-			return
-		}
 
 		orderModel := models.Order{
 			ID:     orderString,
@@ -382,36 +185,16 @@ func (h *Handlers) UploadOrderHandler() http.HandlerFunc {
 		err = h.orderService.UploadOrder(userID, orderModel)
 		if err != nil {
 			if errors.Is(err, orderservice.ErrOrderBelongsToUser) {
-				w.WriteHeader(http.StatusOK)
-
-				successResponse := models.OrdersPostResponse{
-					Status: "success",
-				}
-
-				json.NewEncoder(w).Encode(successResponse)
+				h.handleJSONError(w, http.StatusConflict, "order already exists")
 				return
 			}
 
 			if errors.Is(err, orderservice.ErrOrderBelongsToAnotherUser) {
-				w.WriteHeader(http.StatusConflict)
-
-				errResponse := models.OrdersPostResponse{
-					Status: "error",
-					Errors: []string{"order belongs to another user"},
-				}
-
-				json.NewEncoder(w).Encode(errResponse)
+				h.handleJSONError(w, http.StatusConflict, "order belongs to another user")
 				return
 			}
 
-			w.WriteHeader(http.StatusInternalServerError)
-
-			errResponse := models.OrdersPostResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -427,18 +210,18 @@ func (h *Handlers) GetUserOrdersHandler() http.HandlerFunc {
 
 		userID, err := h.authService.ParseToken(token)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
 		orders, err := h.orderService.GetUserOrders(userID)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
 		if len(orders) == 0 {
-			w.WriteHeader(http.StatusNoContent)
+			h.handleJSONError(w, http.StatusNoContent, "no orders found")
 			return
 		}
 
@@ -456,14 +239,7 @@ func (h *Handlers) GetUserBalanceHandler() http.HandlerFunc {
 
 		userID, err := h.authService.ParseToken(token)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-
-			errResponse := models.UserBalanceResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -471,25 +247,11 @@ func (h *Handlers) GetUserBalanceHandler() http.HandlerFunc {
 		if err != nil {
 			// Чисто теоретически, это возможно, но не должно происходить
 			if errors.Is(err, storage.ErrUserNotFound) {
-				w.WriteHeader(http.StatusNotFound)
-
-				errResponse := models.UserBalanceResponse{
-					Status: "error",
-					Errors: []string{"user not found"},
-				}
-
-				json.NewEncoder(w).Encode(errResponse)
+				h.handleJSONError(w, http.StatusNotFound, "user not found")
 				return
 			}
 
-			w.WriteHeader(http.StatusInternalServerError)
-
-			errResponse := models.UserBalanceResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -500,75 +262,19 @@ func (h *Handlers) GetUserBalanceHandler() http.HandlerFunc {
 }
 
 func (h *Handlers) WithdrawPointsHandler() http.HandlerFunc {
-	const (
-		withdrawalSchema = `{
-			"$schema": "http://json-schema.org/draft-07/schema#",
-			"type": "object",
-			"required": ["order", "sum"],
-			"additionalProperties": false,
-			"properties": {
-				"order": {
-					"type": "string",
-					"minLength": 1
-				},
-				"sum": {
-					"type": "integer",
-					"minimum": 1
-				}
-			}
-		}`
-	)
-	validator := jsonvalidator.New(withdrawalSchema)
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-
-			errResponse := models.WithdrawalsPointsResponse{
-				Status: "error",
-				Errors: []string{"Body error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusBadRequest, "body error")
 			return
 		}
 		defer r.Body.Close()
 
-		if ok, err := validator.Validate(body); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-
-			errResponse := models.RegisterResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
-			return
-		} else if !ok {
-			errors := validator.Report()
-
-			errResponse := models.RegisterResponse{
-				Status: "error",
-				Errors: errors,
-			}
-
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(errResponse)
-			return
-		}
-
 		var withdrawalRequest models.WithdrawalRequest
 		if err := json.Unmarshal(body, &withdrawalRequest); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-
-			errResponse := models.WithdrawalsPointsResponse{
-				Status: "error",
-				Errors: []string{"bad request: invalid JSON format"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusBadRequest, "bad request: invalid JSON format")
 			return
 		}
 
@@ -578,14 +284,7 @@ func (h *Handlers) WithdrawPointsHandler() http.HandlerFunc {
 			ProcessedAt: time.Now(),
 		}
 		if err := h.withdrawalService.PostWithdraw(wd); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-
-			errResponse := models.WithdrawalsPointsResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -607,27 +306,13 @@ func (h *Handlers) GetWithdrawalsHandler() http.HandlerFunc {
 
 		userID, err := h.authService.ParseToken(token)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-
-			errResponse := models.WithdrawalsPointsResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
 		withdrawals, err := h.withdrawalService.GetUserWithdrawals(userID)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-
-			errResponse := models.WithdrawalsPointsResponse{
-				Status: "error",
-				Errors: []string{"internal server error"},
-			}
-
-			json.NewEncoder(w).Encode(errResponse)
+			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -640,4 +325,16 @@ func (h *Handlers) GetWithdrawalsHandler() http.HandlerFunc {
 
 		json.NewEncoder(w).Encode(withdrawals)
 	}
+}
+
+func (h *Handlers) handleJSONError(w http.ResponseWriter, status int, errors ...string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	errResponse := models.ErrorResponse{
+		Status: "error",
+		Errors: errors,
+	}
+
+	json.NewEncoder(w).Encode(errResponse)
 }

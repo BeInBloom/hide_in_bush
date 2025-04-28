@@ -4,9 +4,11 @@ go 1.24.1
 
 require (
 	github.com/go-chi/chi v1.5.5
+	github.com/go-chi/cors v1.2.1
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/shopspring/decimal v1.4.0
 	github.com/xeipuuv/gojsonschema v1.2.0
+	golang.org/x/crypto v0.37.0
 )
 
 require (
