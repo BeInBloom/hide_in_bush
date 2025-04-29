@@ -21,8 +21,8 @@ type Mw struct {
 	logger      *slog.Logger
 }
 
-func New(lg *slog.Logger, as authService) Mw {
-	return Mw{
+func New(lg *slog.Logger, as authService) *Mw {
+	return &Mw{
 		authService: as,
 		logger:      lg,
 	}

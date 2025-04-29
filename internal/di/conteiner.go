@@ -8,6 +8,12 @@ import (
 	"github.com/BeInBloom/hide_in_bush/internal/logger"
 	"github.com/BeInBloom/hide_in_bush/internal/middlewares"
 	"github.com/BeInBloom/hide_in_bush/internal/models"
+	"github.com/BeInBloom/hide_in_bush/internal/router"
+	authservice "github.com/BeInBloom/hide_in_bush/internal/services/auth_service"
+	orderservice "github.com/BeInBloom/hide_in_bush/internal/services/order_service"
+	userservice "github.com/BeInBloom/hide_in_bush/internal/services/user_service"
+	withdrawalservice "github.com/BeInBloom/hide_in_bush/internal/services/withdrawal_service"
+	psqlstorage "github.com/BeInBloom/hide_in_bush/internal/storage/psql"
 	"github.com/go-chi/chi"
 )
 
@@ -18,50 +24,18 @@ type routerBuilder interface {
 type chiMiddleware = func(next http.Handler) http.Handler
 
 // Хз что с этой портянкой делать
-type (
-	handlerBuilder interface {
-		RegisterUserHandler() http.HandlerFunc
-		LoginUserHandler() http.HandlerFunc
-		UploadOrderHandler() http.HandlerFunc
-		GetUserOrdersHandler() http.HandlerFunc
-		GetUserBalanceHandler() http.HandlerFunc
-		WithdrawPointsHandler() http.HandlerFunc
-		GetWithdrawalsHandler() http.HandlerFunc
-	}
-
-	middlewaresBuilder interface {
-		Auth() chiMiddleware
-		Logger() chiMiddleware
-	}
-
-	userService interface {
-		Register(credentials models.UserCredentials) (userID string, err error)
-		ValidateCredentials(models.UserCredentials) (userID string, err error)
-		UserBalance(userID string) (models.Balance, error)
-	}
-
-	withdrawalService interface {
-		GetUserWithdrawals(userID string) ([]models.Withdrawal, error)
-		PostWithdraw(withdrawwal models.Withdrawal) error
-	}
-
-	orderService interface {
-		UploadOrder(userID string, order models.Order) error
-		GetUserOrders(userID string) ([]models.Order, error)
-	}
-
-	authService interface {
-		GenerateToken(userID string) (string, error)
-		ParseToken(token string) (string, error)
-	}
-)
 
 type container struct {
-	router      routerBuilder
-	cfg         models.Config
-	lg          *slog.Logger
-	handlers    *handlers.Handlers
-	middlewares *middlewares.Mw
+	router            routerBuilder
+	cfg               models.Config
+	lg                *slog.Logger
+	handlers          *handlers.Handlers
+	middlewares       *middlewares.Mw
+	userService       *userservice.UserService
+	orderService      *orderservice.OrderService
+	authService       *authservice.AuthService
+	withdrawalService *withdrawalservice.WithdrawalService
+	db                *psqlstorage.PqsqlStorage
 }
 
 func New(cfg models.Config) *container {
@@ -70,15 +44,64 @@ func New(cfg models.Config) *container {
 	}
 }
 
+func (c *container) DB() *psqlstorage.PqsqlStorage {
+	if c.db == nil {
+		c.db = psqlstorage.New(
+			c.Config().Server.DSN,
+		)
+	}
+
+	return c.db
+}
+
+func (c *container) UserService() *userservice.UserService {
+	if c.userService == nil {
+		c.userService = userservice.New(
+			c.DB(),
+			c.AuthService(),
+		)
+	}
+
+	return c.userService
+}
+
+func (c *container) OrderService() *orderservice.OrderService {
+	if c.orderService == nil {
+		c.orderService = orderservice.New(
+			c.DB(),
+		)
+	}
+
+	return c.orderService
+}
+
+func (c *container) AuthService() *authservice.AuthService {
+	if c.authService == nil {
+		c.authService = authservice.New()
+	}
+
+	return c.authService
+}
+
+func (c *container) WithdrawalService() *withdrawalservice.WithdrawalService {
+	if c.withdrawalService == nil {
+		c.withdrawalService = withdrawalservice.New(
+			c.Config().Server.Address,
+			c.DB(),
+		)
+	}
+
+	return c.withdrawalService
+}
+
 func (c *container) Handlers() *handlers.Handlers {
 	if c.handlers == nil {
-		panic("implement me")
-		// c.handlers = handlers.New(
-		// 	c.UserService(),
-		// 	c.AuthService(),
-		// 	c.OrderService(),
-		// 	c.WithdrawService(),
-		// )
+		c.handlers = handlers.New(
+			c.UserService(),
+			c.AuthService(),
+			c.OrderService(),
+			c.WithdrawalService(),
+		)
 	}
 
 	return c.handlers
@@ -86,7 +109,10 @@ func (c *container) Handlers() *handlers.Handlers {
 
 func (c *container) Middleware() *middlewares.Mw {
 	if c.middlewares == nil {
-		panic("implement me")
+		c.middlewares = middlewares.New(
+			c.Logger(),
+			c.AuthService(),
+		)
 	}
 
 	return c.middlewares
@@ -94,7 +120,10 @@ func (c *container) Middleware() *middlewares.Mw {
 
 func (c *container) Router() chi.Router {
 	if c.router == nil {
-		// c.router = router.New(c.Handlers(), c.Middleware())
+		c.router = router.New(
+			c.Handlers(),
+			c.Middleware(),
+		)
 	}
 
 	return c.router.Build()
@@ -114,7 +143,7 @@ func (c *container) Address() string {
 
 func (c *container) Logger() *slog.Logger {
 	if c.lg == nil {
-		logger.New(c.cfg.Env)
+		c.lg = logger.New(c.cfg.Env)
 	}
 
 	return c.lg

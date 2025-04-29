@@ -68,25 +68,25 @@ func (u *UserService) Register(
 
 func (u *UserService) ValidateCredentials(
 	credentials models.UserCredentials,
-) (ok bool, err error) {
+) (userID string, err error) {
 	user, err := u.repo.GetUserByLogin(credentials.Login)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
-			return false, errors.Join(ErrUserNotFound)
+			return "", errors.Join(ErrUserNotFound)
 		}
 
-		return false, fmt.Errorf("failed to get user: %w", err)
+		return "", fmt.Errorf("failed to get user: %w", err)
 	}
 
-	ok, err = u.isCorrectPassword(user, credentials)
+	ok, err := u.isCorrectPassword(user, credentials)
 	if err != nil {
-		return false, fmt.Errorf("failed to validate password: %w", err)
+		return "", fmt.Errorf("failed to validate password: %w", err)
 	}
 	if !ok {
-		return false, errors.Join(ErrInvalidCredentials)
+		return "", errors.Join(ErrInvalidCredentials)
 	}
 
-	return true, nil
+	return user.ID, nil
 }
 
 func (u *UserService) UserBalance(

@@ -17,8 +17,6 @@ import (
 func main() {
 	di := di.New(config.MustConfig())
 
-	lg := di.Logger()
-
 	mainApp := mainapp.New(
 		di.Logger(),
 		server.New(

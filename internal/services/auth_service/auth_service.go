@@ -8,11 +8,23 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const (
+	tokenDuration = 24 * time.Hour
+	secret        = "secret"
+)
+
 // Да, я знаю, что без хранения у меня не будет возможности отзывать токе
 // и тд и тд, но уже у меня просто нету на это времени
 type AuthService struct {
 	tokenDuration time.Duration
 	secret        []byte
+}
+
+func New() *AuthService {
+	return &AuthService{
+		tokenDuration: tokenDuration,
+		secret:        []byte(secret),
+	}
 }
 
 func (a *AuthService) GenerateToken(userID string) (string, error) {
