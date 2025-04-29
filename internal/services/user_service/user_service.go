@@ -21,7 +21,7 @@ type (
 	}
 )
 
-type userService struct {
+type UserService struct {
 	repo repo
 	auth auth
 }
@@ -29,14 +29,14 @@ type userService struct {
 func New(
 	repo repo,
 	auth auth,
-) *userService {
-	return &userService{
+) *UserService {
+	return &UserService{
 		repo: repo,
 		auth: auth,
 	}
 }
 
-func (u *userService) Register(
+func (u *UserService) Register(
 	credentials models.UserCredentials,
 ) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
@@ -66,7 +66,7 @@ func (u *userService) Register(
 	return token, nil
 }
 
-func (u *userService) ValidateCredentials(
+func (u *UserService) ValidateCredentials(
 	credentials models.UserCredentials,
 ) (ok bool, err error) {
 	user, err := u.repo.GetUserByLogin(credentials.Login)
@@ -89,7 +89,7 @@ func (u *userService) ValidateCredentials(
 	return true, nil
 }
 
-func (u *userService) UserBalance(
+func (u *UserService) UserBalance(
 	userID string,
 ) (models.Balance, error) {
 	user, err := u.repo.GetUserByID(userID)
@@ -104,7 +104,7 @@ func (u *userService) UserBalance(
 	return user.Balance, nil
 }
 
-func (u *userService) isCorrectPassword(
+func (u *UserService) isCorrectPassword(
 	user models.User,
 	credentials models.UserCredentials,
 ) (bool, error) {

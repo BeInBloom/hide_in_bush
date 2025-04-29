@@ -12,6 +12,8 @@ import (
 	"github.com/BeInBloom/hide_in_bush/internal/models"
 )
 
+// Сам проект переписывался чуть ли не с 0 неоднократно
+// Подчистить и доделать времени уже особо нету
 func main() {
 	di := di.New(config.MustConfig())
 

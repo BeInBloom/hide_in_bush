@@ -4,10 +4,12 @@ import (
 	"io"
 	"net/http"
 
+	errorreporter "github.com/BeInBloom/hide_in_bush/internal/error_reporter"
 	"github.com/BeInBloom/hide_in_bush/internal/validator"
 )
 
 func (m *Mw) BodyValidator(v validator.Validator[[]byte]) chiMiddleware {
+	reporter := errorreporter.New(nil)
 	return func(next http.Handler) http.Handler {
 		logger := m.logger.With("middleware", "validator")
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -20,10 +22,10 @@ func (m *Mw) BodyValidator(v validator.Validator[[]byte]) chiMiddleware {
 			}
 
 			if ok, err := v.Validate(data); err != nil {
-				m.handleJSONError(w, http.StatusBadRequest, v.Report()...)
+				m.handleJSONError(w, http.StatusBadRequest, reporter.Report(err)...)
 				return
 			} else if !ok {
-				logger.Error("Request body is invalid", "error", v.Report())
+				logger.Error("Request body is invalid")
 				m.handleJSONError(w, http.StatusBadRequest, "Request body is invalid")
 				return
 			}

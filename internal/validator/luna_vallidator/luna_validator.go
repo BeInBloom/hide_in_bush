@@ -2,9 +2,7 @@ package lunavallidator
 
 import "strconv"
 
-type lunaValidator struct {
-	lastReport []string
-}
+type lunaValidator struct{}
 
 func New() *lunaValidator {
 	return &lunaValidator{}
@@ -12,28 +10,20 @@ func New() *lunaValidator {
 
 func (v *lunaValidator) Validate(numberStr []byte) (bool, error) {
 	if len(numberStr) == 0 {
-		v.lastReport = []string{"empty luna number"}
 		return false, nil
 	}
 
 	number, err := strconv.Atoi(string(numberStr))
 	if err != nil {
-		v.lastReport = []string{"invalid luna number"}
 		return false, nil
 	}
 
 	ok := isValidLuna(number)
 	if !ok {
-		v.lastReport = []string{"invalid luna number"}
 		return false, nil
 	}
 
-	v.lastReport = []string{"valid luna number"}
 	return true, nil
-}
-
-func (v *lunaValidator) Report() []string {
-	return v.lastReport
 }
 
 // Надеюсь, это работает

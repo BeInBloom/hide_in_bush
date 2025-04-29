@@ -14,7 +14,6 @@ type ValidatorInput interface {
 
 type Validator[T ValidatorInput] interface {
 	Validate(data T) (bool, error)
-	Report() []string
 }
 
 type (
@@ -70,18 +69,9 @@ func (v *anyValidator[T]) Validate(data T) (bool, error) {
 		if ok, _ := validator.Validate(data); ok {
 			return true, nil
 		}
-		v.failures = append(v.failures, validator.Report()...)
 	}
 
 	return false, nil
-}
-
-func (v *anyValidator[T]) Report() []string {
-	if len(v.failures) == 0 {
-		return []string{}
-	}
-
-	return v.failures
 }
 
 func (v *allValidator[T]) Validate(data T) (bool, error) {
@@ -94,13 +84,10 @@ func (v *allValidator[T]) Validate(data T) (bool, error) {
 	success := true
 
 	for _, validator := range v.validators {
-		if ok, err := validator.Validate(data); !ok || err != nil {
-			success = false
-			if err != nil {
-				v.failures = append(v.failures, err.Error())
-			} else {
-				v.failures = append(v.failures, validator.Report()...)
-			}
+		if ok, err := validator.Validate(data); err != nil {
+			return false, err
+		} else if !ok {
+			return false, nil
 		}
 	}
 
@@ -127,7 +114,6 @@ func (v *NotValidator[T]) Validate(data T) (bool, error) {
 		return true, nil
 	}
 
-	v.failure = append(v.failure, v.validator.Report()...)
 	return false, nil
 }
 
