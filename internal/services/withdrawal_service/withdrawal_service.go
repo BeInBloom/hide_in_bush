@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	queryLimit       = 100
+	queryLimit      = 100
 	maxIdleConns    = 10
 	idleConnTimeout = 30 * time.Second
 	maxTryCount     = 5
@@ -84,7 +84,7 @@ func (w *WithdrawalService) getWithdrawalByOrders(
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			withdrawal, err := w.getWithdrawalByOrderId(order.ID)
+			withdrawal, err := w.getWithdrawalByOrderID(order.ID)
 			if err != nil {
 				if errors.Is(err, ErrWithdrawalNotFound) {
 					return nil
@@ -107,12 +107,12 @@ func (w *WithdrawalService) getWithdrawalByOrders(
 	return withdrawals, nil
 }
 
-func (w *WithdrawalService) getWithdrawalByOrderId(
+func (w *WithdrawalService) getWithdrawalByOrderID(
 	orderID string,
 ) (models.Withdrawal, error) {
 	var counter int
 	for counter < maxTryCount {
-		request, err := w.makeReqByOrderId(orderID)
+		request, err := w.makeReqByOrderID(orderID)
 		if err != nil {
 			return models.Withdrawal{}, fmt.Errorf("failed to make request: %w", err)
 		}
@@ -144,7 +144,7 @@ func (w *WithdrawalService) getWithdrawalByOrderId(
 	return models.Withdrawal{}, ErrFailedToGetWithdrawals
 }
 
-func (w *WithdrawalService) makeReqByOrderId(
+func (w *WithdrawalService) makeReqByOrderID(
 	orderID string,
 ) (*http.Request, error) {
 	qery, err := url.JoinPath(w.url, orderID)
