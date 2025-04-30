@@ -102,12 +102,14 @@ type (
 
 	Order struct {
 		ID       string          `json:"number"`
+		UserID   string          `json:"user_id"`
 		Status   string          `json:"status"`
 		Accrual  decimal.Decimal `json:"accrual,omitempty"`
 		Uploaded string          `json:"uploaded_at"`
 	}
 
 	Balance struct {
+		UserID         string          `json:"user_id"`
 		CurrentBalance decimal.Decimal `json:"current_balance"`
 		Withdrawn      decimal.Decimal `json:"withdrawn"`
 	}
