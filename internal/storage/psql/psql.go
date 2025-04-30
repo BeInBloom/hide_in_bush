@@ -49,14 +49,14 @@ func (p *PqsqlStorage) CreateOrder(userID string, order models.Order) (string, e
 }
 
 func (p *PqsqlStorage) GetUserByID(userID string) (models.User, error) {
-	query := sq.Select("login", "password").
+	query := sq.Select("id", "login", "password").
 		From("users").
 		Where(sq.Eq{"id": userID})
 
 	var user models.User
 	err := query.RunWith(p.db).
 		QueryRow().
-		Scan(&user.Login, &user.Password)
+		Scan(&user.ID, &user.Login, &user.Password)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.User{}, storage.ErrUserNotFound
