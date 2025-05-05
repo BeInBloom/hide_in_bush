@@ -1,36 +1,78 @@
 package server
 
-import "context"
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/BeInBloom/hide_in_bush/internal/models"
+)
+
+const (
+	shutdownTimeout = 10 * time.Second
+)
 
 type server struct {
-	ctx context.Context
-	c   context.CancelFunc
+	httpServer *http.Server
+	done       chan struct{}
+	logger     *slog.Logger
 }
 
-func New(adr string) *server {
-	ctx, cancel := context.WithCancel(context.Background())
+func New(deps models.ServerDeps) *server {
+	logger := deps.Logger.With(
+		"app_name", "http_server", "addr", deps.Addr,
+	)
 
-	return &server{
-		ctx: ctx,
-		c:   cancel,
+	s := &http.Server{
+		Addr:    deps.Addr,
+		Handler: deps.Router,
 	}
+
+	server := &server{
+		logger:     logger,
+		httpServer: s,
+		done:       make(chan struct{}),
+	}
+
+	return server
 }
 
 func (s *server) Run() error {
-	const fn = "server.Run"
+	s.logger.Info("Starting HTTP server")
 
-	for {
-		select {
-		case <-s.ctx.Done():
-			return nil
-		}
+	errCh := make(chan error, 1)
+	go func() {
+		err := s.httpServer.ListenAndServe()
+		errCh <- err
+	}()
+
+	s.logger.Info("HTTP server started successfully")
+
+	<-s.done
+
+	if err := <-errCh; !errors.Is(err, http.ErrServerClosed) {
+		s.logger.Error("HTTP server error", "error", err)
+		return err
 	}
+
+	return nil
 }
 
 func (s *server) Close() error {
-	const fn = "server.Close"
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
 
-	s.c()
+	s.logger.Info("Closing HTTP server")
+	if err := s.httpServer.Shutdown(ctx); err != nil {
+		s.logger.Error("Error shutting down HTTP server", "error", err)
+		return err
+	}
+
+	s.logger.Info("HTTP server closed successfully")
+
+	s.done <- struct{}{}
 
 	return nil
 }
