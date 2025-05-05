@@ -3,6 +3,7 @@ package psqlstorage
 import (
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/BeInBloom/hide_in_bush/internal/models"
 	"github.com/BeInBloom/hide_in_bush/internal/storage"
@@ -71,10 +72,11 @@ func (p *PqsqlStorage) GetUserByID(userID string) (models.User, error) {
 }
 
 func (p *PqsqlStorage) CreateUser(user models.User) (string, error) {
-	query := "INSERT INTO users (login, password) VALUES ($1, $2) RETURNING id"
+	query := "INSERT INTO users (login, password, created_at, updated_at) VALUES ($1, $2, $3, $4) RETURNING id"
 
+	now := time.Now()
 	var userID string
-	err := p.db.QueryRow(query, user.Login, user.Password).Scan(&userID)
+	err := p.db.QueryRow(query, user.Login, user.Password, now, now).Scan(&userID)
 	if err != nil {
 		if isDuplicateKeyError(err) {
 			return "", storage.ErrUserAlreadyExists
@@ -93,7 +95,11 @@ func (p *PqsqlStorage) GetUserByLogin(login string) (models.User, error) {
 
 	orders, err := p.GetOrdersByUserID(user.ID)
 	if err != nil {
-		return models.User{}, err
+		if errors.Is(err, storage.ErrNoOrders) {
+			user.Orders = []models.Order{}
+		} else {
+			return models.User{}, err
+		}
 	}
 	user.Orders = orders
 
@@ -163,6 +169,9 @@ func (p *PqsqlStorage) GetOrdersByUserID(userID string) ([]models.Order, error) 
 
 	rows, err := p.db.Query(orderQuery, userID)
 	if err != nil {
+		if isNoRowsError(err) {
+			return nil, storage.ErrNoOrders
+		}
 		return nil, storage.ErrCantGetOrders
 	}
 	defer rows.Close()
@@ -218,4 +227,9 @@ func (p *PqsqlStorage) getUserByID(userID string) (models.User, error) {
 func isDuplicateKeyError(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+func isNoRowsError(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "42703"
 }

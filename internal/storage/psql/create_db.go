@@ -91,6 +91,27 @@ func initializeSchema(db *sql.DB) error {
         END IF;
     END
     $$;
+
+        -- Создание функции для автоматического создания записи в таблице balances
+    CREATE OR REPLACE FUNCTION create_user_balance()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        INSERT INTO balances (user_id) VALUES (NEW.id);
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- Создание триггера для автоматического создания записи в таблице balances
+    DO $$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'create_user_balance_trigger') THEN
+            CREATE TRIGGER create_user_balance_trigger
+            AFTER INSERT ON users
+            FOR EACH ROW
+            EXECUTE FUNCTION create_user_balance();
+        END IF;
+    END
+    $$;
     `
 
 	_, err := db.Exec(query)
