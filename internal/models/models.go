@@ -15,8 +15,8 @@ type (
 	}
 
 	Server struct {
-		Address              string `yaml:"address" json:"address" env:"ADDRESS"`
-		DSN                  string `yaml:"dsn" json:"dsn" env:"DSN"`
+		Address              string `yaml:"address" json:"address" env:"RUN_ADDRESS"`
+		DSN                  string `yaml:"dsn" json:"dsn" env:"DATABASE_URI"`
 		AccrualSystemAddress string `yaml:"accrual_system_address" json:"accrual_system_address" env:"ACCRUAL_SYSTEM_ADDRESS"`
 	}
 )

@@ -27,7 +27,7 @@ func getConfigByEnv() models.Config {
 
 func parseFlags(cfg *models.Config) {
 	runAddressFlag := flag.String("a", "", "Address to run the server")
-	databaseURIFlag := flag.String("d", "", "Address to database")
+	databaseDNSFlag := flag.String("d", "", "Address to database")
 	accrualSystemAddressFlag := flag.String("r", "", "Address to accrual system")
 
 	flag.Parse()
@@ -36,8 +36,8 @@ func parseFlags(cfg *models.Config) {
 		cfg.Server.Address = *runAddressFlag
 	}
 
-	if *databaseURIFlag != "" {
-		cfg.Server.DSN = *databaseURIFlag
+	if *databaseDNSFlag != "" {
+		cfg.Server.DSN = *databaseDNSFlag
 	}
 
 	if *accrualSystemAddressFlag != "" {
