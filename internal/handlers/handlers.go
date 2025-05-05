@@ -107,6 +107,8 @@ func (h *Handlers) RegisterUserHandler() http.HandlerFunc {
 			Token:  token,
 		}
 
+		w.Header().Set("Authorization", token)
+
 		json.NewEncoder(w).Encode(successResponse)
 	}
 }
@@ -146,6 +148,8 @@ func (h *Handlers) LoginUserHandler() http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusOK)
+
+		w.Header().Set("Authorization", token)
 
 		successResponse := models.LoginResponse{
 			Status: "success",
