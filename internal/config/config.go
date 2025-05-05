@@ -10,9 +10,7 @@ import (
 
 func MustConfig() models.Config {
 	cfg := getConfigByEnv()
-
 	parseFlags(&cfg)
-
 	return cfg
 }
 

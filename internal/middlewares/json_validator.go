@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 
@@ -14,6 +15,7 @@ func (m *Mw) BodyValidator(v validator.Validator[[]byte]) chiMiddleware {
 		logger := m.logger.With("middleware", "validator")
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			data, err := io.ReadAll(r.Body)
+			r.Body.Close()
 			if err != nil {
 				logger.Error("Failed to read request body", "error", err)
 				m.handleJSONError(
@@ -30,6 +32,7 @@ func (m *Mw) BodyValidator(v validator.Validator[[]byte]) chiMiddleware {
 				return
 			}
 
+			r.Body = io.NopCloser(bytes.NewReader(data))
 			next.ServeHTTP(w, r)
 		})
 	}

@@ -10,4 +10,6 @@ var (
 	ErrCantCreateUser     = errors.New("can't create user")
 	ErrCantGetUser        = errors.New("can't get user")
 	ErrCantCreateOrder    = errors.New("can't create order")
+	ErrCantGetOrders      = errors.New("can't get orders")
+	ErrCantGetUserBalance = errors.New("can't get user balance")
 )

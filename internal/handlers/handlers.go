@@ -135,7 +135,7 @@ func (h *Handlers) LoginUserHandler() http.HandlerFunc {
 				return
 			}
 
-			h.handleJSONError(w, http.StatusUnauthorized, "invalid credentials")
+			h.handleJSONError(w, http.StatusBadRequest, "invalid credentials")
 			return
 		}
 
