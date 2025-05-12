@@ -52,7 +52,7 @@ func (u *UserService) Register(
 	userID, err := u.repo.CreateUser(user)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserAlreadyExists) {
-			return "", errors.Join(ErrUserAlreadyExists)
+			return "", fmt.Errorf("user already exists: %w", err)
 		}
 
 		return "", fmt.Errorf("failed to create user: %w", err)
@@ -72,7 +72,7 @@ func (u *UserService) ValidateCredentials(
 	user, err := u.repo.GetUserByLogin(credentials.Login)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
-			return "", errors.Join(ErrUserNotFound)
+			return "", fmt.Errorf("user not found: %w", err)
 		}
 
 		return "", fmt.Errorf("failed to get user: %w", err)
@@ -83,7 +83,7 @@ func (u *UserService) ValidateCredentials(
 		return "", fmt.Errorf("failed to validate password: %w", err)
 	}
 	if !ok {
-		return "", errors.Join(ErrInvalidCredentials)
+		return "", fmt.Errorf("invalid credentials: %w", ErrInvalidCredentials)
 	}
 
 	return user.ID, nil
@@ -95,7 +95,7 @@ func (u *UserService) UserBalance(
 	user, err := u.repo.GetUserByID(userID)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
-			return models.Balance{}, errors.Join(ErrUserNotFound)
+			return models.Balance{}, fmt.Errorf("user not found: %w", err)
 		}
 
 		return models.Balance{}, fmt.Errorf("failed to get user: %w", err)

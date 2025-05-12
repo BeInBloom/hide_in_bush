@@ -100,14 +100,14 @@ func (h *Handlers) RegisterUserHandler() http.HandlerFunc {
 			return
 		}
 
+		w.Header().Set("Authorization", token)
+
 		w.WriteHeader(http.StatusOK)
 
 		successResponse := models.RegisterResponse{
 			Status: "success",
 			Token:  token,
 		}
-
-		w.Header().Set("Authorization", token)
 
 		json.NewEncoder(w).Encode(successResponse)
 	}
@@ -147,9 +147,9 @@ func (h *Handlers) LoginUserHandler() http.HandlerFunc {
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
-
 		w.Header().Set("Authorization", token)
+
+		w.WriteHeader(http.StatusOK)
 
 		successResponse := models.LoginResponse{
 			Status: "success",
@@ -220,6 +220,11 @@ func (h *Handlers) GetUserOrdersHandler() http.HandlerFunc {
 
 		orders, err := h.orderService.GetUserOrders(userID)
 		if err != nil {
+			if errors.Is(err, storage.ErrNoOrders) {
+				h.handleJSONError(w, http.StatusNoContent, "no orders found")
+				return
+			}
+
 			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}

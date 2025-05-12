@@ -40,10 +40,14 @@ func (o *OrderService) GetUserOrders(userID string) ([]models.Order, error) {
 	user, err := o.repo.GetUserByID(userID)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
-			return nil, fmt.Errorf("user not found: %w", err)
+			return nil, fmt.Errorf("user %s not found: %w", user, err)
 		}
 
-		return nil, fmt.Errorf("failed to get user: %w", err)
+		if errors.Is(err, storage.ErrNoOrders) {
+			return nil, fmt.Errorf("no orders found for user %s: %w", user, err)
+		}
+
+		return nil, fmt.Errorf("failed to get user %s: %w", user, err)
 	}
 
 	return user.Orders, nil
