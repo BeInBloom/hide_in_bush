@@ -105,7 +105,7 @@ type (
 		UserID   string          `json:"user_id"`
 		Status   string          `json:"status"`
 		Accrual  decimal.Decimal `json:"accrual,omitempty"`
-		Uploaded string          `json:"uploaded_at"`
+		Uploaded time.Time       `json:"uploaded_at"`
 	}
 
 	Balance struct {

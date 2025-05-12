@@ -36,7 +36,7 @@ func initializeSchema(db *sql.DB) error {
 
     -- Таблица заказов
     CREATE TABLE IF NOT EXISTS orders (
-        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         status TEXT NOT NULL,
         accrual NUMERIC(10, 2),

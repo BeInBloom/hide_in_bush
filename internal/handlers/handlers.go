@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/BeInBloom/hide_in_bush/internal/models"
-	orderservice "github.com/BeInBloom/hide_in_bush/internal/services/order_service"
 	"github.com/BeInBloom/hide_in_bush/internal/storage"
 	jsonvalidator "github.com/BeInBloom/hide_in_bush/internal/validator/json_validator"
 	"github.com/shopspring/decimal"
@@ -35,7 +34,7 @@ type (
 	}
 
 	orderService interface {
-		UploadOrder(userID string, order models.Order) error
+		UploadOrder(order models.Order) error
 		GetUserOrders(userID string) ([]models.Order, error)
 	}
 
@@ -72,31 +71,31 @@ func (h *Handlers) RegisterUserHandler() http.HandlerFunc {
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			h.handleJSONError(w, http.StatusBadRequest, "body error")
+			h.handleJSON(w, http.StatusBadRequest, "body error")
 			return
 		}
 		defer r.Body.Close()
 
 		var credentials models.UserCredentials
 		if err := json.Unmarshal(body, &credentials); err != nil {
-			h.handleJSONError(w, http.StatusBadRequest, "bad request: invalid JSON format")
+			h.handleJSON(w, http.StatusBadRequest, "bad request: invalid JSON format")
 			return
 		}
 
 		userID, err := h.userService.Register(credentials)
 		if err != nil {
 			if errors.Is(err, storage.ErrUserAlreadyExists) {
-				h.handleJSONError(w, http.StatusConflict, "user already exists")
+				h.handleJSON(w, http.StatusConflict, "user already exists")
 				return
 			}
 
-			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
 		token, err := h.authService.GenerateToken(userID)
 		if err != nil {
-			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -119,31 +118,31 @@ func (h *Handlers) LoginUserHandler() http.HandlerFunc {
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			h.handleJSONError(w, http.StatusBadRequest, "body error")
+			h.handleJSON(w, http.StatusBadRequest, "body error")
 			return
 		}
 		defer r.Body.Close()
 
 		var credentials models.UserCredentials
 		if err := json.Unmarshal(body, &credentials); err != nil {
-			h.handleJSONError(w, http.StatusBadRequest, "bad request: invalid JSON format")
+			h.handleJSON(w, http.StatusBadRequest, "bad request: invalid JSON format")
 			return
 		}
 
 		userID, err := h.userService.ValidateCredentials(credentials)
 		if err != nil {
 			if errors.Is(err, storage.ErrUserNotFound) {
-				h.handleJSONError(w, http.StatusNotFound, "user not found")
+				h.handleJSON(w, http.StatusNotFound, "user not found")
 				return
 			}
 
-			h.handleJSONError(w, http.StatusBadRequest, "invalid credentials")
+			h.handleJSON(w, http.StatusBadRequest, "invalid credentials")
 			return
 		}
 
 		token, err := h.authService.GenerateToken(userID)
 		if err != nil {
-			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -168,13 +167,13 @@ func (h *Handlers) UploadOrderHandler() http.HandlerFunc {
 
 		userID, err := h.authService.ParseToken(token)
 		if err != nil {
-			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			h.handleJSONError(w, http.StatusBadRequest, "body error")
+			h.handleJSON(w, http.StatusBadRequest, "body error")
 			return
 		}
 		defer r.Body.Close()
@@ -182,23 +181,25 @@ func (h *Handlers) UploadOrderHandler() http.HandlerFunc {
 		orderString := strings.TrimSpace(string(body))
 
 		orderModel := models.Order{
-			ID:     orderString,
-			Status: "NEW",
+			ID:       orderString,
+			UserID:   userID,
+			Status:   "NEW",
+			Uploaded: time.Now(),
 		}
 
-		err = h.orderService.UploadOrder(userID, orderModel)
+		err = h.orderService.UploadOrder(orderModel)
 		if err != nil {
-			if errors.Is(err, orderservice.ErrOrderBelongsToUser) {
-				h.handleJSONError(w, http.StatusConflict, "order already exists")
+			if errors.Is(err, storage.ErrOrderAlreadyRegistered) {
+				h.handleJSON(w, http.StatusOK, "order already exists")
 				return
 			}
 
-			if errors.Is(err, orderservice.ErrOrderBelongsToAnotherUser) {
-				h.handleJSONError(w, http.StatusConflict, "order belongs to another user")
+			if errors.Is(err, storage.ErrOrderRegisteredToOtherUser) {
+				h.handleJSON(w, http.StatusConflict, "order belongs to another user")
 				return
 			}
 
-			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -214,23 +215,23 @@ func (h *Handlers) GetUserOrdersHandler() http.HandlerFunc {
 
 		userID, err := h.authService.ParseToken(token)
 		if err != nil {
-			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
 		orders, err := h.orderService.GetUserOrders(userID)
 		if err != nil {
 			if errors.Is(err, storage.ErrNoOrders) {
-				h.handleJSONError(w, http.StatusNoContent, "no orders found")
+				h.handleJSON(w, http.StatusNoContent, "no orders found")
 				return
 			}
 
-			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
 		if len(orders) == 0 {
-			h.handleJSONError(w, http.StatusNoContent, "no orders found")
+			h.handleJSON(w, http.StatusNoContent, "no orders found")
 			return
 		}
 
@@ -248,7 +249,7 @@ func (h *Handlers) GetUserBalanceHandler() http.HandlerFunc {
 
 		userID, err := h.authService.ParseToken(token)
 		if err != nil {
-			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -256,11 +257,11 @@ func (h *Handlers) GetUserBalanceHandler() http.HandlerFunc {
 		if err != nil {
 			// Чисто теоретически, это возможно, но не должно происходить
 			if errors.Is(err, storage.ErrUserNotFound) {
-				h.handleJSONError(w, http.StatusNotFound, "user not found")
+				h.handleJSON(w, http.StatusNotFound, "user not found")
 				return
 			}
 
-			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -276,14 +277,14 @@ func (h *Handlers) WithdrawPointsHandler() http.HandlerFunc {
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			h.handleJSONError(w, http.StatusBadRequest, "body error")
+			h.handleJSON(w, http.StatusBadRequest, "body error")
 			return
 		}
 		defer r.Body.Close()
 
 		var withdrawalRequest models.WithdrawalRequest
 		if err := json.Unmarshal(body, &withdrawalRequest); err != nil {
-			h.handleJSONError(w, http.StatusBadRequest, "bad request: invalid JSON format")
+			h.handleJSON(w, http.StatusBadRequest, "bad request: invalid JSON format")
 			return
 		}
 
@@ -293,7 +294,7 @@ func (h *Handlers) WithdrawPointsHandler() http.HandlerFunc {
 			ProcessedAt: time.Now(),
 		}
 		if err := h.withdrawalService.PostWithdraw(wd); err != nil {
-			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -315,13 +316,13 @@ func (h *Handlers) GetWithdrawalsHandler() http.HandlerFunc {
 
 		userID, err := h.authService.ParseToken(token)
 		if err != nil {
-			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
 		withdrawals, err := h.withdrawalService.GetUserWithdrawals(userID)
 		if err != nil {
-			h.handleJSONError(w, http.StatusInternalServerError, "internal server error")
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 
@@ -336,7 +337,7 @@ func (h *Handlers) GetWithdrawalsHandler() http.HandlerFunc {
 	}
 }
 
-func (h *Handlers) handleJSONError(w http.ResponseWriter, status int, errors ...string) {
+func (h *Handlers) handleJSON(w http.ResponseWriter, status int, errors ...string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 

@@ -3,6 +3,7 @@ package psqlstorage
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/BeInBloom/hide_in_bush/internal/models"
@@ -30,24 +31,21 @@ func (p *PqsqlStorage) Close() error {
 	return p.db.Close()
 }
 
-func (p *PqsqlStorage) CreateOrder(userID string, order models.Order) (string, error) {
-	query := `
-	INSERT INTO orders (user_id, status, price, uploaded)
-	VALUES ($1, $2, $3, $4)
-	RETURNING id`
-
-	var orderID string
-	err := p.db.QueryRow(
-		query, userID, order.Status, order.Accrual, order.Uploaded,
-	).Scan(&orderID)
+func (p *PqsqlStorage) CreateOrder(order models.Order) (string, error) {
+	existingOrder, err := p.getOrderByID(order.ID)
 	if err != nil {
-		if isDuplicateKeyError(err) {
-			return "", storage.ErrOrderAlreadyExists
+		if errors.Is(err, sql.ErrNoRows) {
+			return p.createOrderIfNotExists(order)
+		} else {
+			return "", fmt.Errorf("failed to get order by ID: %w", err)
 		}
-		return "", storage.ErrCantCreateOrder
 	}
 
-	return orderID, nil
+	if existingOrder.UserID != order.UserID {
+		return "", storage.ErrOrderRegisteredToOtherUser
+	}
+
+	return "", storage.ErrOrderAlreadyRegistered
 }
 
 func (p *PqsqlStorage) GetUserByID(userID string) (models.User, error) {
@@ -114,31 +112,6 @@ func (p *PqsqlStorage) GetUserByLogin(login string) (models.User, error) {
 	return user, nil
 }
 
-func (p *PqsqlStorage) getUserByLogin(login string) (models.User, error) {
-	userQuery := `
-	SELECT id, login, password, created_at, updated_at
-	FROM users
-	WHERE login = $1`
-
-	var user models.User
-	err := p.db.QueryRow(userQuery, login).Scan(
-		&user.ID,
-		&user.Login,
-		&user.Password,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return models.User{}, storage.ErrUserNotFound
-		}
-
-		return models.User{}, storage.ErrCantGetUser
-	}
-
-	return user, nil
-}
-
 func (p *PqsqlStorage) GetUserBalance(userID string) (models.Balance, error) {
 	balanceQuery := `
 	SELECT user_id, current_balance, withdrawn
@@ -164,7 +137,7 @@ func (p *PqsqlStorage) GetUserBalance(userID string) (models.Balance, error) {
 
 func (p *PqsqlStorage) GetOrdersByUserID(userID string) ([]models.Order, error) {
 	orderQuery := `
-	SELECT id, user_id, status, price, uploaded
+	SELECT id, user_id, status, accrual, uploaded
 	FROM orders
 	WHERE user_id = $1
 	ORDER BY uploaded DESC`
@@ -201,6 +174,52 @@ func (p *PqsqlStorage) GetOrdersByUserID(userID string) ([]models.Order, error) 
 	return orders, nil
 }
 
+func (p *PqsqlStorage) getOrderByID(orderID string) (models.Order, error) {
+	query := `
+	SELECT id, user_id, status, accrual, uploaded
+	FROM orders
+	WHERE id = $1`
+
+	var order models.Order
+	err := p.db.QueryRow(query, orderID).Scan(
+		&order.ID,
+		&order.UserID,
+		&order.Status,
+		&order.Accrual,
+		&order.Uploaded,
+	)
+	if err != nil {
+		return models.Order{}, fmt.Errorf("failed to get order by ID: %w", err)
+	}
+
+	return order, nil
+}
+
+func (p *PqsqlStorage) getUserByLogin(login string) (models.User, error) {
+	userQuery := `
+	SELECT id, login, password, created_at, updated_at
+	FROM users
+	WHERE login = $1`
+
+	var user models.User
+	err := p.db.QueryRow(userQuery, login).Scan(
+		&user.ID,
+		&user.Login,
+		&user.Password,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.User{}, storage.ErrUserNotFound
+		}
+
+		return models.User{}, storage.ErrCantGetUser
+	}
+
+	return user, nil
+}
+
 func (p *PqsqlStorage) getUserByID(userID string) (models.User, error) {
 	userQuery := `
 	SELECT id, login, password, created_at, updated_at
@@ -224,6 +243,26 @@ func (p *PqsqlStorage) getUserByID(userID string) (models.User, error) {
 	}
 
 	return user, nil
+}
+
+func (p *PqsqlStorage) createOrderIfNotExists(order models.Order) (string, error) {
+	insertQuery := `
+		INSERT INTO orders (id, user_id, status, accrual, uploaded)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id`
+
+	var orderID string
+	err := p.db.QueryRow(
+		insertQuery, order.ID, order.UserID, order.Status, order.Accrual, order.Uploaded,
+	).Scan(&orderID)
+	if err != nil {
+		if isDuplicateKeyError(err) {
+			return "", storage.ErrOrderAlreadyRegistered
+		}
+		return "", storage.ErrCantCreateOrder
+	}
+
+	return orderID, nil
 }
 
 func isDuplicateKeyError(err error) bool {

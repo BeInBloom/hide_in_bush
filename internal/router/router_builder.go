@@ -95,7 +95,7 @@ type (
 	middlewaresBuilder interface {
 		Auth() chiMiddleware
 		Logger() chiMiddleware
-		BodyValidator(v validator.Validator[[]byte]) chiMiddleware
+		BodyValidator(stauts int, v validator.Validator[[]byte]) chiMiddleware
 	}
 )
 
@@ -134,20 +134,20 @@ func (rb *routerBuilder) setRoutes() {
 
 	rb.router.Route("/api", func(r chi.Router) {
 		r.Route("/user", func(r chi.Router) {
-			r.With(middleware.AllowContentType("application/json"), rb.middlewares.BodyValidator(registerJSONValidator)).
+			r.With(middleware.AllowContentType("application/json"), rb.middlewares.BodyValidator(http.StatusBadRequest, registerJSONValidator)).
 				Post("/register", rb.handlers.RegisterUserHandler())
-			r.With(middleware.AllowContentType("application/json"), rb.middlewares.BodyValidator(loginJSONValidator)).
+			r.With(middleware.AllowContentType("application/json"), rb.middlewares.BodyValidator(http.StatusBadRequest, loginJSONValidator)).
 				Post("/login", rb.handlers.LoginUserHandler())
 
 			r.Group(func(r chi.Router) {
 				r.Use(rb.middlewares.Auth())
 
-				r.With(middleware.AllowContentType("text/plain"), rb.middlewares.BodyValidator(algorithmLunaValidator)).
+				r.With(middleware.AllowContentType("text/plain"), rb.middlewares.BodyValidator(http.StatusUnprocessableEntity, algorithmLunaValidator)).
 					Post("/orders", rb.handlers.UploadOrderHandler())
 				r.Get("/orders", rb.handlers.GetUserOrdersHandler())
 
 				r.Get("/balance", rb.handlers.GetUserBalanceHandler())
-				r.With(middleware.AllowContentType("application/json"), rb.middlewares.BodyValidator(withdrawJSONValidator)).
+				r.With(middleware.AllowContentType("application/json"), rb.middlewares.BodyValidator(http.StatusBadRequest, withdrawJSONValidator)).
 					Post("/balance/withdraw", rb.handlers.WithdrawPointsHandler())
 
 				r.Get("/withdrawals", rb.handlers.GetWithdrawalsHandler())

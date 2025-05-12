@@ -10,7 +10,7 @@ import (
 
 type repo interface {
 	GetUserByID(userID string) (models.User, error)
-	CreateOrder(userID string, order models.Order) (string, error)
+	CreateOrder(order models.Order) (string, error)
 }
 
 type OrderService struct {
@@ -23,10 +23,10 @@ func New(repo repo) *OrderService {
 	}
 }
 
-func (o *OrderService) UploadOrder(userID string, order models.Order) error {
-	_, err := o.repo.CreateOrder(userID, order)
+func (o *OrderService) UploadOrder(order models.Order) error {
+	_, err := o.repo.CreateOrder(order)
 	if err != nil {
-		if errors.Is(err, storage.ErrOrderAlreadyExists) {
+		if errors.Is(err, storage.ErrOrderAlreadyRegistered) {
 			return fmt.Errorf("order already exists: %w", err)
 		}
 
