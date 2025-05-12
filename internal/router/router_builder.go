@@ -142,7 +142,7 @@ func (rb *routerBuilder) setRoutes() {
 			r.Group(func(r chi.Router) {
 				r.Use(rb.middlewares.Auth())
 
-				r.With(middleware.AllowContentType("application/json"), rb.middlewares.BodyValidator(algorithmLunaValidator)).
+				r.With(middleware.AllowContentType("text/plain"), rb.middlewares.BodyValidator(algorithmLunaValidator)).
 					Post("/orders", rb.handlers.UploadOrderHandler())
 				r.Get("/orders", rb.handlers.GetUserOrdersHandler())
 

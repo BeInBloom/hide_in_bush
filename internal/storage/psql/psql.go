@@ -58,7 +58,9 @@ func (p *PqsqlStorage) GetUserByID(userID string) (models.User, error) {
 
 	orders, err := p.GetOrdersByUserID(user.ID)
 	if err != nil {
-		return models.User{}, err
+		if !errors.Is(err, storage.ErrNoOrders) {
+			return models.User{}, err
+		}
 	}
 	user.Orders = orders
 
