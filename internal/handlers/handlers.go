@@ -11,7 +11,6 @@ import (
 	"github.com/BeInBloom/hide_in_bush/internal/models"
 	"github.com/BeInBloom/hide_in_bush/internal/storage"
 	jsonvalidator "github.com/BeInBloom/hide_in_bush/internal/validator/json_validator"
-	"github.com/shopspring/decimal"
 )
 
 type validator interface {
@@ -290,7 +289,7 @@ func (h *Handlers) WithdrawPointsHandler() http.HandlerFunc {
 
 		wd := models.Withdrawal{
 			Order:       withdrawalRequest.Order,
-			Sum:         decimal.NewFromInt(withdrawalRequest.Sum),
+			Sum:         withdrawalRequest.Sum,
 			ProcessedAt: time.Now(),
 		}
 		if err := h.withdrawalService.PostWithdraw(wd); err != nil {

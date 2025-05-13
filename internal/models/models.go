@@ -35,8 +35,8 @@ type (
 	}
 
 	WithdrawalRequest struct {
-		Order string `json:"order"`
-		Sum   int64  `json:"sum"`
+		Order string          `json:"order"`
+		Sum   decimal.Decimal `json:"sum"`
 	}
 )
 
