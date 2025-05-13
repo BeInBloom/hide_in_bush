@@ -289,7 +289,7 @@ func (h *Handlers) WithdrawPointsHandler() http.HandlerFunc {
 
 		wd := models.Withdrawal{
 			Order:       withdrawalRequest.Order,
-			Sum:         withdrawalRequest.Sum.InexactFloat64(),
+			Sum:         withdrawalRequest.Sum,
 			ProcessedAt: time.Now(),
 		}
 		if err := h.withdrawalService.PostWithdraw(wd); err != nil {
