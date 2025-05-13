@@ -101,11 +101,11 @@ type (
 	}
 
 	Order struct {
-		ID       string          `json:"number"`
-		UserID   string          `json:"user_id"`
-		Status   string          `json:"status"`
-		Accrual  decimal.Decimal `json:"accrual,omitempty"`
-		Uploaded time.Time       `json:"uploaded_at"`
+		ID       string    `json:"number"`
+		UserID   string    `json:"user_id"`
+		Status   string    `json:"status"`
+		Accrual  float64   `json:"accrual,omitempty"`
+		Uploaded time.Time `json:"uploaded_at"`
 	}
 
 	Balance struct {
