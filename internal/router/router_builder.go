@@ -70,8 +70,8 @@ const (
 				"minLength": 1
 			},
 			"sum": {
-				"type": "integer",
-				"minimum": 1
+				"type": "number",
+				"minimum": 0.01
 			}
 		}
 	}`

@@ -80,7 +80,7 @@ func (c *container) AuthService() *authservice.AuthService {
 func (c *container) WithdrawalService() *withdrawalservice.WithdrawalService {
 	if c.withdrawalService == nil {
 		c.withdrawalService = withdrawalservice.New(
-			c.Config().Server.Address,
+			c.Config().Server.AccrualSystemAddress,
 			c.DB(),
 		)
 	}

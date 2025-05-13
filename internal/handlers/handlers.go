@@ -243,6 +243,8 @@ func (h *Handlers) GetUserOrdersHandler() http.HandlerFunc {
 
 func (h *Handlers) GetUserBalanceHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
 		token := r.Header.Get("Authorization")
 
 		userID, err := h.authService.ParseToken(token)

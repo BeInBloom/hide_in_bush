@@ -42,7 +42,7 @@ func New(url string, repo repo) *WithdrawalService {
 
 	return &WithdrawalService{
 		client: client,
-		url:    url,
+		url:    "http://" + url,
 		repo:   repo,
 	}
 }
@@ -147,7 +147,8 @@ func (w *WithdrawalService) getWithdrawalByOrderID(
 func (w *WithdrawalService) makeReqByOrderID(
 	orderID string,
 ) (*http.Request, error) {
-	qery, err := url.JoinPath(w.url, orderID)
+	const withdrawalPath = "/api/orders/"
+	qery, err := url.JoinPath(w.url, withdrawalPath, orderID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to join path: %w", err)
 	}
