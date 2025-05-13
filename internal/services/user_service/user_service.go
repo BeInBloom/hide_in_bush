@@ -15,24 +15,17 @@ type (
 		GetUserByLogin(login string) (models.User, error)
 		GetUserByID(userID string) (models.User, error)
 	}
-
-	auth interface {
-		GenerateToken(user string) (string, error)
-	}
 )
 
 type UserService struct {
 	repo repo
-	auth auth
 }
 
 func New(
 	repo repo,
-	auth auth,
 ) *UserService {
 	return &UserService{
 		repo: repo,
-		auth: auth,
 	}
 }
 
@@ -49,7 +42,7 @@ func (u *UserService) Register(
 		Password: string(hashedPassword),
 	}
 
-	userID, err := u.repo.CreateUser(user)
+	id, err := u.repo.CreateUser(user)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserAlreadyExists) {
 			return "", fmt.Errorf("user already exists: %w", err)
@@ -58,12 +51,7 @@ func (u *UserService) Register(
 		return "", fmt.Errorf("failed to create user: %w", err)
 	}
 
-	token, err := u.auth.GenerateToken(userID)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate token: %w", err)
-	}
-
-	return token, nil
+	return id, nil
 }
 
 func (u *UserService) ValidateCredentials(

@@ -23,7 +23,7 @@ var _ validator = (*jsonvalidator.Validator)(nil)
 
 type (
 	userService interface {
-		Register(credentials models.UserCredentials) (token string, err error)
+		Register(credentials models.UserCredentials) (userID string, err error)
 		ValidateCredentials(models.UserCredentials) (userID string, err error)
 		UserBalance(userID string) (models.Balance, error)
 	}
@@ -82,13 +82,19 @@ func (h *Handlers) RegisterUserHandler() http.HandlerFunc {
 			return
 		}
 
-		token, err := h.userService.Register(credentials)
+		id, err := h.userService.Register(credentials)
 		if err != nil {
 			if errors.Is(err, storage.ErrUserAlreadyExists) {
 				h.handleJSON(w, http.StatusConflict, "user already exists")
 				return
 			}
 
+			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+
+		token, err := h.authService.GenerateToken(id)
+		if err != nil {
 			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}

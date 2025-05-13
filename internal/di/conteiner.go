@@ -2,7 +2,6 @@ package di
 
 import (
 	"log/slog"
-	"net/http"
 
 	"github.com/BeInBloom/hide_in_bush/internal/handlers"
 	"github.com/BeInBloom/hide_in_bush/internal/logger"
@@ -20,10 +19,6 @@ import (
 type routerBuilder interface {
 	Build() chi.Router
 }
-
-type chiMiddleware = func(next http.Handler) http.Handler
-
-// Хз что с этой портянкой делать
 
 type container struct {
 	router            routerBuilder
@@ -58,7 +53,6 @@ func (c *container) UserService() *userservice.UserService {
 	if c.userService == nil {
 		c.userService = userservice.New(
 			c.DB(),
-			c.AuthService(),
 		)
 	}
 
