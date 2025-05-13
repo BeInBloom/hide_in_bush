@@ -157,7 +157,7 @@ func (rb *routerBuilder) setRoutes() {
 }
 
 func (rb *routerBuilder) setMiddlewares() {
-	compressor := middleware.NewCompressor(5, "gzip", "application/json")
+	// compressor := middleware.NewCompressor(5, "gzip", "application/json")
 
 	rb.router.Use(middleware.Recoverer)
 
@@ -168,7 +168,7 @@ func (rb *routerBuilder) setMiddlewares() {
 	rb.router.Use(middleware.Throttle(throttleLimit))
 	rb.router.Use(middleware.Timeout(timeout))
 
-	rb.router.Use(compressor.Handler)
+	// rb.router.Use(compressor.Handler)
 
 	rb.router.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"https://*", "http://*"},
