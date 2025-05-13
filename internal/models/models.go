@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
-	"github.com/shopspring/decimal"
 )
 
 type (
@@ -35,8 +34,8 @@ type (
 	}
 
 	WithdrawalRequest struct {
-		Order string          `json:"order"`
-		Sum   decimal.Decimal `json:"sum"`
+		Order string  `json:"order"`
+		Sum   float64 `json:"sum"`
 	}
 )
 
@@ -109,9 +108,9 @@ type (
 	}
 
 	Balance struct {
-		UserID         string          `json:"user_id"`
-		CurrentBalance decimal.Decimal `json:"current_balance"`
-		Withdrawn      decimal.Decimal `json:"withdrawn"`
+		UserID         string  `json:"user_id"`
+		CurrentBalance float64 `json:"current_balance"`
+		Withdrawn      float64 `json:"withdrawn"`
 	}
 
 	Withdrawal struct {
