@@ -176,7 +176,6 @@ func (rb *routerBuilder) setMiddlewares() {
 		AllowedHeaders: []string{
 			"Accept", "Authorization",
 			"Content-Type", "Content-Encoding",
-			"X-Requested-With", "X-Forwarded-For", "X-Real-IP",
 		},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
