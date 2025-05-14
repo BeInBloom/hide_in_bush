@@ -8,16 +8,26 @@ import (
 	mainapp "github.com/BeInBloom/hide_in_bush/internal/app/main_app"
 	"github.com/BeInBloom/hide_in_bush/internal/app/server"
 	"github.com/BeInBloom/hide_in_bush/internal/config"
-	"github.com/BeInBloom/hide_in_bush/internal/logger"
+	"github.com/BeInBloom/hide_in_bush/internal/di"
+	"github.com/BeInBloom/hide_in_bush/internal/models"
 )
 
+// Сам проект переписывался чуть ли не с 0 неоднократно
+// Подчистить и доделать времени уже особо нету
 func main() {
-	cfg := config.MustConfig()
-	lg := logger.New(cfg.Env)
+	di := di.New(config.MustConfig())
+
+	lg := di.Logger()
 
 	mainApp := mainapp.New(
-		lg,
-		server.New(cfg.Address),
+		di.Logger(),
+		server.New(
+			models.ServerDeps{
+				Logger: di.Logger(),
+				Addr:   di.Address(),
+				Router: di.Router(),
+			},
+		),
 	)
 
 	errChn := make(chan error, 1)

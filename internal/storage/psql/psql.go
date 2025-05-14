@@ -1,0 +1,276 @@
+package psqlstorage
+
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/BeInBloom/hide_in_bush/internal/models"
+	"github.com/BeInBloom/hide_in_bush/internal/storage"
+	"github.com/jackc/pgx/v5/pgconn"
+	_ "github.com/jackc/pgx/v5/stdlib"
+)
+
+type PqsqlStorage struct {
+	db *sql.DB
+}
+
+func New(s string) *PqsqlStorage {
+	db, err := createDB(s)
+	if err != nil {
+		panic(err)
+	}
+
+	return &PqsqlStorage{
+		db: db,
+	}
+}
+
+func (p *PqsqlStorage) Close() error {
+	return p.db.Close()
+}
+
+func (p *PqsqlStorage) CreateOrder(order models.Order) (string, error) {
+	existingOrder, err := p.getOrderByID(order.ID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return p.createOrderIfNotExists(order)
+		} else {
+			return "", fmt.Errorf("failed to get order by ID: %w", err)
+		}
+	}
+
+	if existingOrder.UserID != order.UserID {
+		return "", storage.ErrOrderRegisteredToOtherUser
+	}
+
+	return "", storage.ErrOrderAlreadyRegistered
+}
+
+func (p *PqsqlStorage) GetUserByID(userID string) (models.User, error) {
+	user, err := p.getUserByID(userID)
+	if err != nil {
+		return models.User{}, err
+	}
+
+	orders, err := p.GetOrdersByUserID(user.ID)
+	if err != nil {
+		if !errors.Is(err, storage.ErrNoOrders) {
+			return models.User{}, err
+		}
+	}
+	user.Orders = orders
+
+	balance, err := p.GetUserBalance(user.ID)
+	if err != nil {
+		return models.User{}, err
+	}
+	user.Balance = balance
+
+	return user, nil
+}
+
+func (p *PqsqlStorage) CreateUser(user models.User) (string, error) {
+	query := "INSERT INTO users (login, password, created_at, updated_at) VALUES ($1, $2, $3, $4) RETURNING id"
+
+	now := time.Now()
+	var userID string
+	err := p.db.QueryRow(query, user.Login, user.Password, now, now).Scan(&userID)
+	if err != nil {
+		if isDuplicateKeyError(err) {
+			return "", storage.ErrUserAlreadyExists
+		}
+		return "", storage.ErrCantCreateUser
+	}
+
+	return userID, nil
+}
+
+func (p *PqsqlStorage) GetUserByLogin(login string) (models.User, error) {
+	user, err := p.getUserByLogin(login)
+	if err != nil {
+		return models.User{}, err
+	}
+
+	orders, err := p.GetOrdersByUserID(user.ID)
+	if err != nil {
+		if errors.Is(err, storage.ErrNoOrders) {
+			user.Orders = []models.Order{}
+		} else {
+			return models.User{}, err
+		}
+	}
+	user.Orders = orders
+
+	balance, err := p.GetUserBalance(user.ID)
+	if err != nil {
+		return models.User{}, err
+	}
+	user.Balance = balance
+
+	return user, nil
+}
+
+func (p *PqsqlStorage) GetUserBalance(userID string) (models.Balance, error) {
+	balanceQuery := `
+	SELECT user_id, current_balance, withdrawn
+	FROM balances
+	WHERE user_id = $1`
+
+	var balance models.Balance
+	err := p.db.QueryRow(balanceQuery, userID).Scan(
+		&balance.UserID,
+		&balance.CurrentBalance,
+		&balance.Withdrawn,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.Balance{}, storage.ErrUserNotFound
+		}
+
+		return models.Balance{}, storage.ErrCantGetUserBalance
+	}
+
+	return balance, nil
+}
+
+func (p *PqsqlStorage) GetOrdersByUserID(userID string) ([]models.Order, error) {
+	orderQuery := `
+	SELECT id, user_id, status, accrual, uploaded
+	FROM orders
+	WHERE user_id = $1
+	ORDER BY uploaded DESC`
+
+	rows, err := p.db.Query(orderQuery, userID)
+	if err != nil {
+		if isNoRowsError(err) {
+			return nil, storage.ErrNoOrders
+		}
+		return nil, storage.ErrCantGetOrders
+	}
+	defer rows.Close()
+
+	var orders []models.Order
+	for rows.Next() {
+		var order models.Order
+		err := rows.Scan(
+			&order.ID,
+			&order.UserID,
+			&order.Status,
+			&order.Accrual,
+			&order.Uploaded,
+		)
+		if err != nil {
+			return nil, storage.ErrCantGetOrders
+		}
+
+		orders = append(orders, order)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, storage.ErrCantGetOrders
+	}
+
+	return orders, nil
+}
+
+func (p *PqsqlStorage) getOrderByID(orderID string) (models.Order, error) {
+	query := `
+	SELECT id, user_id, status, accrual, uploaded
+	FROM orders
+	WHERE id = $1`
+
+	var order models.Order
+	err := p.db.QueryRow(query, orderID).Scan(
+		&order.ID,
+		&order.UserID,
+		&order.Status,
+		&order.Accrual,
+		&order.Uploaded,
+	)
+	if err != nil {
+		return models.Order{}, fmt.Errorf("failed to get order by ID: %w", err)
+	}
+
+	return order, nil
+}
+
+func (p *PqsqlStorage) getUserByLogin(login string) (models.User, error) {
+	userQuery := `
+	SELECT id, login, password, created_at, updated_at
+	FROM users
+	WHERE login = $1`
+
+	var user models.User
+	err := p.db.QueryRow(userQuery, login).Scan(
+		&user.ID,
+		&user.Login,
+		&user.Password,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.User{}, storage.ErrUserNotFound
+		}
+
+		return models.User{}, storage.ErrCantGetUser
+	}
+
+	return user, nil
+}
+
+func (p *PqsqlStorage) getUserByID(userID string) (models.User, error) {
+	userQuery := `
+	SELECT id, login, password, created_at, updated_at
+	FROM users
+	WHERE id = $1`
+
+	var user models.User
+	err := p.db.QueryRow(userQuery, userID).Scan(
+		&user.ID,
+		&user.Login,
+		&user.Password,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.User{}, storage.ErrUserNotFound
+		}
+
+		return models.User{}, storage.ErrCantGetUser
+	}
+
+	return user, nil
+}
+
+func (p *PqsqlStorage) createOrderIfNotExists(order models.Order) (string, error) {
+	insertQuery := `
+		INSERT INTO orders (id, user_id, status, accrual, uploaded)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id`
+
+	var orderID string
+	err := p.db.QueryRow(
+		insertQuery, order.ID, order.UserID, order.Status, order.Accrual, order.Uploaded,
+	).Scan(&orderID)
+	if err != nil {
+		if isDuplicateKeyError(err) {
+			return "", storage.ErrOrderAlreadyRegistered
+		}
+		return "", storage.ErrCantCreateOrder
+	}
+
+	return orderID, nil
+}
+
+func isDuplicateKeyError(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+func isNoRowsError(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "42703"
+}

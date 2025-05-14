@@ -4,6 +4,8 @@
 *.dll
 *.so
 *.dylib
+main
+bin/
 
 # Test binary, built with `go test -c`
 *.test
@@ -14,6 +16,7 @@
 # Binaries
 cmd/gophermart/main
 cmd/gophermart/gophermart
+gophermarttest*
 
 # Dependency directories (remove the comment below to include it)
 vendor/
@@ -21,3 +24,5 @@ vendor/
 # IDEs directories
 .idea
 .vscode
+
+logs
