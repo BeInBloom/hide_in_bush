@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,7 +33,12 @@ type WithdrawalService struct {
 	repo   repo
 }
 
-func New(url string, repo repo) *WithdrawalService {
+func New(baseURL string, repo repo) *WithdrawalService {
+	// Добавляем схему только если её нет
+	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		baseURL = "http://" + baseURL
+	}
+
 	client := http.Client{
 		Timeout: 5 * time.Second,
 		Transport: &http.Transport{
@@ -43,7 +49,7 @@ func New(url string, repo repo) *WithdrawalService {
 
 	return &WithdrawalService{
 		client: client,
-		url:    "http://" + url,
+		url:    baseURL,
 		repo:   repo,
 	}
 }

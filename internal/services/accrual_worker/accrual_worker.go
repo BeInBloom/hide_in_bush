@@ -8,21 +8,18 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/BeInBloom/hide_in_bush/internal/models"
 )
 
 const (
-	// Интервал между запусками worker'а
 	pollInterval = 5 * time.Second
-	// Максимальное количество заказов за один цикл
-	batchSize = 100
-	// HTTP client timeout
-	httpTimeout = 5 * time.Second
+	batchSize    = 100
+	httpTimeout  = 5 * time.Second
 )
 
-// Статусы заказов из accrual системы
 const (
 	StatusRegistered = "REGISTERED"
 	StatusInvalid    = "INVALID"
@@ -30,22 +27,18 @@ const (
 	StatusProcessed  = "PROCESSED"
 )
 
-// accrualResponse — ответ от системы расчёта баллов
 type accrualResponse struct {
 	Order   string  `json:"order"`
 	Status  string  `json:"status"`
 	Accrual float64 `json:"accrual,omitempty"`
 }
 
-// repo — интерфейс репозитория для worker'а
 type repo interface {
 	GetPendingOrders(ctx context.Context, limit int) ([]models.Order, error)
 	UpdateOrderStatus(ctx context.Context, orderID, status string, accrual float64) error
 	AddAccrualToBalance(ctx context.Context, userID string, amount float64) error
 }
 
-// AccrualWorker опрашивает внешнюю систему расчёта баллов
-// и обновляет статусы заказов и балансы пользователей.
 type AccrualWorker struct {
 	repo       repo
 	accrualURL string
@@ -54,11 +47,14 @@ type AccrualWorker struct {
 	done       chan struct{}
 }
 
-// New создаёт новый AccrualWorker
 func New(accrualURL string, repo repo, logger *slog.Logger) *AccrualWorker {
+	if !strings.HasPrefix(accrualURL, "http://") && !strings.HasPrefix(accrualURL, "https://") {
+		accrualURL = "http://" + accrualURL
+	}
+
 	return &AccrualWorker{
 		repo:       repo,
-		accrualURL: "http://" + accrualURL,
+		accrualURL: accrualURL,
 		client: http.Client{
 			Timeout: httpTimeout,
 		},
@@ -67,8 +63,6 @@ func New(accrualURL string, repo repo, logger *slog.Logger) *AccrualWorker {
 	}
 }
 
-// Run запускает worker в бесконечном цикле.
-// Реализует интерфейс app для mainApp.
 func (w *AccrualWorker) Run() error {
 	w.logger.Info("Запуск accrual worker")
 
@@ -86,14 +80,12 @@ func (w *AccrualWorker) Run() error {
 	}
 }
 
-// Close останавливает worker
 func (w *AccrualWorker) Close() error {
 	w.logger.Info("Остановка accrual worker")
 	close(w.done)
 	return nil
 }
 
-// processOrders обрабатывает пачку заказов со статусом NEW или PROCESSING
 func (w *AccrualWorker) processOrders(ctx context.Context) {
 	orders, err := w.repo.GetPendingOrders(ctx, batchSize)
 	if err != nil {
@@ -123,7 +115,6 @@ func (w *AccrualWorker) processOrders(ctx context.Context) {
 	}
 }
 
-// processOrder обрабатывает один заказ
 func (w *AccrualWorker) processOrder(ctx context.Context, order models.Order) error {
 	resp, err := w.fetchAccrual(ctx, order.ID)
 	if err != nil {
@@ -131,16 +122,13 @@ func (w *AccrualWorker) processOrder(ctx context.Context, order models.Order) er
 	}
 
 	if resp == nil {
-		// Заказ не найден в системе — пропускаем
 		return nil
 	}
 
-	// Обновляем статус заказа
 	if err := w.repo.UpdateOrderStatus(ctx, order.ID, resp.Status, resp.Accrual); err != nil {
 		return fmt.Errorf("ошибка обновления статуса: %w", err)
 	}
 
-	// Если заказ успешно обработан — начисляем баллы
 	if resp.Status == StatusProcessed && resp.Accrual > 0 {
 		if err := w.repo.AddAccrualToBalance(ctx, order.UserID, resp.Accrual); err != nil {
 			return fmt.Errorf("ошибка начисления баллов: %w", err)
@@ -155,7 +143,6 @@ func (w *AccrualWorker) processOrder(ctx context.Context, order models.Order) er
 	return nil
 }
 
-// fetchAccrual запрашивает информацию о заказе из системы расчёта баллов
 func (w *AccrualWorker) fetchAccrual(ctx context.Context, orderID string) (*accrualResponse, error) {
 	reqURL, err := url.JoinPath(w.accrualURL, "/api/orders/", orderID)
 	if err != nil {
@@ -182,11 +169,9 @@ func (w *AccrualWorker) fetchAccrual(ctx context.Context, orderID string) (*accr
 		return &result, nil
 
 	case http.StatusNoContent:
-		// Заказ не зарегистрирован в системе расчёта
 		return nil, nil
 
 	case http.StatusTooManyRequests:
-		// Rate limiting — нужно подождать
 		retryAfter := resp.Header.Get("Retry-After")
 		if retryAfter != "" {
 			if seconds, err := strconv.Atoi(retryAfter); err == nil {
@@ -199,7 +184,6 @@ func (w *AccrualWorker) fetchAccrual(ctx context.Context, orderID string) (*accr
 					return nil, ctx.Err()
 				case <-time.After(time.Duration(seconds) * time.Second):
 				}
-				// Повторяем запрос рекурсивно
 				return w.fetchAccrual(ctx, orderID)
 			}
 		}
