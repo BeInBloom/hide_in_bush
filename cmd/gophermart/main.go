@@ -28,6 +28,8 @@ func main() {
 				Router: di.Router(),
 			},
 		),
+		// Добавляем accrual worker для фоновой обработки заказов
+		di.AccrualWorker(),
 	)
 
 	errChn := make(chan error, 1)
