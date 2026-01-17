@@ -2,7 +2,8 @@ package config
 
 import (
 	"flag"
-	"fmt"
+	"log/slog"
+	"os"
 
 	"github.com/BeInBloom/hide_in_bush/internal/models"
 	"github.com/ilyakaznacheev/cleanenv"
@@ -19,7 +20,11 @@ func getConfigByEnv() models.Config {
 	var cfg models.Config
 
 	if err := cleanenv.ReadEnv(&cfg); err != nil {
-		panic(fmt.Sprintf("%s: %v", fn, err))
+		slog.Error("Ошибка чтения конфигурации из переменных окружения",
+			"function", fn,
+			"error", err,
+		)
+		os.Exit(1)
 	}
 
 	return cfg
