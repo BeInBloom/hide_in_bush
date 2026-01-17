@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -22,19 +23,19 @@ var _ validator = (*jsonvalidator.Validator)(nil)
 
 type (
 	userService interface {
-		Register(credentials models.UserCredentials) (userID string, err error)
-		ValidateCredentials(models.UserCredentials) (userID string, err error)
-		UserBalance(userID string) (models.Balance, error)
+		Register(ctx context.Context, credentials models.UserCredentials) (userID string, err error)
+		ValidateCredentials(ctx context.Context, creds models.UserCredentials) (userID string, err error)
+		UserBalance(ctx context.Context, userID string) (models.Balance, error)
 	}
 
 	withdrawalService interface {
-		GetUserWithdrawals(userID string) ([]models.Withdrawal, error)
-		PostWithdraw(withdrawwal models.Withdrawal) error
+		GetUserWithdrawals(ctx context.Context, userID string) ([]models.Withdrawal, error)
+		PostWithdraw(ctx context.Context, withdrawwal models.Withdrawal) error
 	}
 
 	orderService interface {
-		UploadOrder(order models.Order) error
-		GetUserOrders(userID string) ([]models.Order, error)
+		UploadOrder(ctx context.Context, order models.Order) error
+		GetUserOrders(ctx context.Context, userID string) ([]models.Order, error)
 	}
 
 	authService interface {
@@ -81,7 +82,7 @@ func (h *Handlers) RegisterUserHandler() http.HandlerFunc {
 			return
 		}
 
-		id, err := h.userService.Register(credentials)
+		id, err := h.userService.Register(r.Context(), credentials)
 		if err != nil {
 			if errors.Is(err, storage.ErrUserAlreadyExists) {
 				h.handleJSON(w, http.StatusConflict, "user already exists")
@@ -128,7 +129,7 @@ func (h *Handlers) LoginUserHandler() http.HandlerFunc {
 			return
 		}
 
-		userID, err := h.userService.ValidateCredentials(credentials)
+		userID, err := h.userService.ValidateCredentials(r.Context(), credentials)
 		if err != nil {
 			if errors.Is(err, storage.ErrUserNotFound) {
 				h.handleJSON(w, http.StatusNotFound, "user not found")
@@ -186,7 +187,7 @@ func (h *Handlers) UploadOrderHandler() http.HandlerFunc {
 			Uploaded: time.Now(),
 		}
 
-		err = h.orderService.UploadOrder(orderModel)
+		err = h.orderService.UploadOrder(r.Context(), orderModel)
 		if err != nil {
 			if errors.Is(err, storage.ErrOrderAlreadyRegistered) {
 				h.handleJSON(w, http.StatusOK, "order already exists")
@@ -218,7 +219,7 @@ func (h *Handlers) GetUserOrdersHandler() http.HandlerFunc {
 			return
 		}
 
-		orders, err := h.orderService.GetUserOrders(userID)
+		orders, err := h.orderService.GetUserOrders(r.Context(), userID)
 		if err != nil {
 			if errors.Is(err, storage.ErrNoOrders) {
 				h.handleJSON(w, http.StatusNoContent, "no orders found")
@@ -252,7 +253,7 @@ func (h *Handlers) GetUserBalanceHandler() http.HandlerFunc {
 			return
 		}
 
-		balance, err := h.userService.UserBalance(userID)
+		balance, err := h.userService.UserBalance(r.Context(), userID)
 		if err != nil {
 			// Чисто теоретически, это возможно, но не должно происходить
 			if errors.Is(err, storage.ErrUserNotFound) {
@@ -292,7 +293,7 @@ func (h *Handlers) WithdrawPointsHandler() http.HandlerFunc {
 			Sum:         withdrawalRequest.Sum,
 			ProcessedAt: time.Now(),
 		}
-		if err := h.withdrawalService.PostWithdraw(wd); err != nil {
+		if err := h.withdrawalService.PostWithdraw(r.Context(), wd); err != nil {
 			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
@@ -319,7 +320,7 @@ func (h *Handlers) GetWithdrawalsHandler() http.HandlerFunc {
 			return
 		}
 
-		withdrawals, err := h.withdrawalService.GetUserWithdrawals(userID)
+		withdrawals, err := h.withdrawalService.GetUserWithdrawals(r.Context(), userID)
 		if err != nil {
 			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return

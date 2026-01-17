@@ -1,6 +1,7 @@
 package userservice
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -11,9 +12,9 @@ import (
 
 type (
 	repo interface {
-		CreateUser(user models.User) (string, error)
-		GetUserByLogin(login string) (models.User, error)
-		GetUserByID(userID string) (models.User, error)
+		CreateUser(ctx context.Context, user models.User) (string, error)
+		GetUserByLogin(ctx context.Context, login string) (models.User, error)
+		GetUserByID(ctx context.Context, userID string) (models.User, error)
 	}
 )
 
@@ -30,6 +31,7 @@ func New(
 }
 
 func (u *UserService) Register(
+	ctx context.Context,
 	credentials models.UserCredentials,
 ) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
@@ -42,7 +44,7 @@ func (u *UserService) Register(
 		Password: string(hashedPassword),
 	}
 
-	id, err := u.repo.CreateUser(user)
+	id, err := u.repo.CreateUser(ctx, user)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserAlreadyExists) {
 			return "", fmt.Errorf("user already exists: %w", err)
@@ -55,9 +57,10 @@ func (u *UserService) Register(
 }
 
 func (u *UserService) ValidateCredentials(
+	ctx context.Context,
 	credentials models.UserCredentials,
 ) (userID string, err error) {
-	user, err := u.repo.GetUserByLogin(credentials.Login)
+	user, err := u.repo.GetUserByLogin(ctx, credentials.Login)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
 			return "", fmt.Errorf("user not found: %w", err)
@@ -78,9 +81,10 @@ func (u *UserService) ValidateCredentials(
 }
 
 func (u *UserService) UserBalance(
+	ctx context.Context,
 	userID string,
 ) (models.Balance, error) {
-	user, err := u.repo.GetUserByID(userID)
+	user, err := u.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
 			return models.Balance{}, fmt.Errorf("user not found: %w", err)

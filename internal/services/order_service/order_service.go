@@ -1,6 +1,7 @@
 package orderservice
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -9,8 +10,8 @@ import (
 )
 
 type repo interface {
-	GetUserByID(userID string) (models.User, error)
-	CreateOrder(order models.Order) (string, error)
+	GetUserByID(ctx context.Context, userID string) (models.User, error)
+	CreateOrder(ctx context.Context, order models.Order) (string, error)
 }
 
 type OrderService struct {
@@ -23,8 +24,8 @@ func New(repo repo) *OrderService {
 	}
 }
 
-func (o *OrderService) UploadOrder(order models.Order) error {
-	_, err := o.repo.CreateOrder(order)
+func (o *OrderService) UploadOrder(ctx context.Context, order models.Order) error {
+	_, err := o.repo.CreateOrder(ctx, order)
 	if err != nil {
 		if errors.Is(err, storage.ErrOrderAlreadyRegistered) {
 			return fmt.Errorf("order already exists: %w", err)
@@ -36,8 +37,8 @@ func (o *OrderService) UploadOrder(order models.Order) error {
 	return nil
 }
 
-func (o *OrderService) GetUserOrders(userID string) ([]models.Order, error) {
-	user, err := o.repo.GetUserByID(userID)
+func (o *OrderService) GetUserOrders(ctx context.Context, userID string) ([]models.Order, error) {
+	user, err := o.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
 			return nil, fmt.Errorf("user %s not found: %w", userID, err)

@@ -1,6 +1,7 @@
 package withdrawalservice
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,7 +23,7 @@ const (
 )
 
 type repo interface {
-	GetUserByID(userID string) (models.User, error)
+	GetUserByID(ctx context.Context, userID string) (models.User, error)
 }
 
 type WithdrawalService struct {
@@ -48,14 +49,15 @@ func New(url string, repo repo) *WithdrawalService {
 }
 
 func (w *WithdrawalService) GetUserWithdrawals(
+	ctx context.Context,
 	userID string,
 ) ([]models.Withdrawal, error) {
-	user, err := w.repo.GetUserByID(userID)
+	user, err := w.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	withdrawal, err := w.getWithdrawalByOrders(user.Orders)
+	withdrawal, err := w.getWithdrawalByOrders(ctx, user.Orders)
 	if err != nil {
 		return nil, ErrFailedToGetWithdrawals
 	}
@@ -64,15 +66,17 @@ func (w *WithdrawalService) GetUserWithdrawals(
 }
 
 func (w *WithdrawalService) PostWithdraw(
+	ctx context.Context,
 	withdrawwal models.Withdrawal,
 ) error {
 	return nil
 }
 
 func (w *WithdrawalService) getWithdrawalByOrders(
+	ctx context.Context,
 	orders []models.Order,
 ) ([]models.Withdrawal, error) {
-	g := errgroup.Group{}
+	g, ctx := errgroup.WithContext(ctx)
 	withdrawals := make([]models.Withdrawal, 0, len(orders))
 	var mu sync.Mutex
 
@@ -81,10 +85,14 @@ func (w *WithdrawalService) getWithdrawalByOrders(
 	for _, order := range orders {
 		order := order
 		g.Go(func() error {
-			sem <- struct{}{}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case sem <- struct{}{}:
+			}
 			defer func() { <-sem }()
 
-			withdrawal, err := w.getWithdrawalByOrderID(order.ID)
+			withdrawal, err := w.getWithdrawalByOrderID(ctx, order.ID)
 			if err != nil {
 				if errors.Is(err, ErrWithdrawalNotFound) {
 					return nil
@@ -108,11 +116,18 @@ func (w *WithdrawalService) getWithdrawalByOrders(
 }
 
 func (w *WithdrawalService) getWithdrawalByOrderID(
+	ctx context.Context,
 	orderID string,
 ) (models.Withdrawal, error) {
 	var counter int
 	for counter < maxTryCount {
-		request, err := w.makeReqByOrderID(orderID)
+		select {
+		case <-ctx.Done():
+			return models.Withdrawal{}, ctx.Err()
+		default:
+		}
+
+		request, err := w.makeReqByOrderID(ctx, orderID)
 		if err != nil {
 			return models.Withdrawal{}, fmt.Errorf("failed to make request: %w", err)
 		}
@@ -127,7 +142,7 @@ func (w *WithdrawalService) getWithdrawalByOrderID(
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests {
-			if err := w.handleToManyRequests(resp); err != nil {
+			if err := w.handleToManyRequests(ctx, resp); err != nil {
 				return models.Withdrawal{}, fmt.Errorf("failed to handle too many requests: %w", err)
 			}
 			counter++
@@ -145,6 +160,7 @@ func (w *WithdrawalService) getWithdrawalByOrderID(
 }
 
 func (w *WithdrawalService) makeReqByOrderID(
+	ctx context.Context,
 	orderID string,
 ) (*http.Request, error) {
 	const withdrawalPath = "/api/orders/"
@@ -153,7 +169,8 @@ func (w *WithdrawalService) makeReqByOrderID(
 		return nil, fmt.Errorf("failed to join path: %w", err)
 	}
 
-	request, err := http.NewRequest(
+	request, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodGet,
 		qery,
 		nil,
@@ -179,6 +196,7 @@ func (w *WithdrawalService) handleStatusOk(
 }
 
 func (w *WithdrawalService) handleToManyRequests(
+	ctx context.Context,
 	r *http.Response,
 ) error {
 	retryAfter := r.Header.Get("Retry-After")
@@ -191,6 +209,10 @@ func (w *WithdrawalService) handleToManyRequests(
 		return fmt.Errorf("failed to parse retry-after not int: %w", err)
 	}
 
-	time.Sleep(time.Duration(retryAfterInt) * time.Second)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(time.Duration(retryAfterInt) * time.Second):
+	}
 	return nil
 }
