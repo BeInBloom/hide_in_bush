@@ -1,7 +1,9 @@
 package config
 
 import (
-	"fmt"
+	"flag"
+	"log/slog"
+	"os"
 
 	"github.com/BeInBloom/hide_in_bush/internal/models"
 	"github.com/ilyakaznacheev/cleanenv"
@@ -9,7 +11,7 @@ import (
 
 func MustConfig() models.Config {
 	cfg := getConfigByEnv()
-
+	parseFlags(&cfg)
 	return cfg
 }
 
@@ -18,8 +20,32 @@ func getConfigByEnv() models.Config {
 	var cfg models.Config
 
 	if err := cleanenv.ReadEnv(&cfg); err != nil {
-		panic(fmt.Sprintf("%s: %v", fn, err))
+		slog.Error("Ошибка чтения конфигурации из переменных окружения",
+			"function", fn,
+			"error", err,
+		)
+		os.Exit(1)
 	}
 
 	return cfg
+}
+
+func parseFlags(cfg *models.Config) {
+	runAddressFlag := flag.String("a", "", "Address to run the server")
+	databaseDNSFlag := flag.String("d", "", "Address to database")
+	accrualSystemAddressFlag := flag.String("r", "", "Address to accrual system")
+
+	flag.Parse()
+
+	if *runAddressFlag != "" {
+		cfg.Server.Address = *runAddressFlag
+	}
+
+	if *databaseDNSFlag != "" {
+		cfg.Server.DSN = *databaseDNSFlag
+	}
+
+	if *accrualSystemAddressFlag != "" {
+		cfg.Server.AccrualSystemAddress = *accrualSystemAddressFlag
+	}
 }
