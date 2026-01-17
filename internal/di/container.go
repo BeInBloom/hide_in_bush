@@ -8,6 +8,7 @@ import (
 	"github.com/BeInBloom/hide_in_bush/internal/middlewares"
 	"github.com/BeInBloom/hide_in_bush/internal/models"
 	"github.com/BeInBloom/hide_in_bush/internal/router"
+	accrualworker "github.com/BeInBloom/hide_in_bush/internal/services/accrual_worker"
 	authservice "github.com/BeInBloom/hide_in_bush/internal/services/auth_service"
 	orderservice "github.com/BeInBloom/hide_in_bush/internal/services/order_service"
 	userservice "github.com/BeInBloom/hide_in_bush/internal/services/user_service"
@@ -30,6 +31,7 @@ type container struct {
 	orderService      *orderservice.OrderService
 	authService       *authservice.AuthService
 	withdrawalService *withdrawalservice.WithdrawalService
+	accrualWorker     *accrualworker.AccrualWorker
 	db                *psqlstorage.PqsqlStorage
 }
 
@@ -43,6 +45,7 @@ func (c *container) DB() *psqlstorage.PqsqlStorage {
 	if c.db == nil {
 		c.db = psqlstorage.New(
 			c.Config().Server.DSN,
+			c.Logger(),
 		)
 	}
 
@@ -86,6 +89,18 @@ func (c *container) WithdrawalService() *withdrawalservice.WithdrawalService {
 	}
 
 	return c.withdrawalService
+}
+
+func (c *container) AccrualWorker() *accrualworker.AccrualWorker {
+	if c.accrualWorker == nil {
+		c.accrualWorker = accrualworker.New(
+			c.Config().Server.AccrualSystemAddress,
+			c.DB(),
+			c.Logger(),
+		)
+	}
+
+	return c.accrualWorker
 }
 
 func (c *container) Handlers() *handlers.Handlers {
