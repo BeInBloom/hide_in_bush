@@ -108,8 +108,8 @@ type (
 	}
 
 	Balance struct {
-		UserID         string  `json:"user_id"`
-		CurrentBalance float64 `json:"current_balance"`
+		UserID         string  `json:"-"`
+		CurrentBalance float64 `json:"current"`
 		Withdrawn      float64 `json:"withdrawn"`
 	}
 

@@ -30,7 +30,7 @@ type (
 
 	withdrawalService interface {
 		GetUserWithdrawals(ctx context.Context, userID string) ([]models.Withdrawal, error)
-		PostWithdraw(ctx context.Context, withdrawwal models.Withdrawal) error
+		PostWithdraw(ctx context.Context, userID string, withdrawal models.Withdrawal) error
 	}
 
 	orderService interface {
@@ -275,6 +275,14 @@ func (h *Handlers) WithdrawPointsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
+		// Получаем userID из токена
+		token := r.Header.Get("Authorization")
+		userID, err := h.authService.ParseToken(token)
+		if err != nil {
+			h.handleJSON(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			h.handleJSON(w, http.StatusBadRequest, "body error")
@@ -293,7 +301,12 @@ func (h *Handlers) WithdrawPointsHandler() http.HandlerFunc {
 			Sum:         withdrawalRequest.Sum,
 			ProcessedAt: time.Now(),
 		}
-		if err := h.withdrawalService.PostWithdraw(r.Context(), wd); err != nil {
+		if err := h.withdrawalService.PostWithdraw(r.Context(), userID, wd); err != nil {
+			// Проверяем недостаточность баланса
+			if errors.Is(err, storage.ErrInsufficientBalance) {
+				h.handleJSON(w, http.StatusPaymentRequired, "insufficient balance")
+				return
+			}
 			h.handleJSON(w, http.StatusInternalServerError, "internal server error")
 			return
 		}

@@ -57,6 +57,19 @@ func initializeSchema(db *sql.DB) error {
             REFERENCES users (id)
             ON DELETE CASCADE
     );
+
+    -- Таблица списаний
+    CREATE TABLE IF NOT EXISTS withdrawals (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        order_id TEXT NOT NULL,
+        sum NUMERIC(10, 2) NOT NULL,
+        processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_user_withdrawal
+            FOREIGN KEY (user_id)
+            REFERENCES users (id)
+            ON DELETE CASCADE
+    );
     
     -- Создание функции для триггера, если её нет
     CREATE OR REPLACE FUNCTION update_updated_at_column()

@@ -14,4 +14,5 @@ var (
 	ErrCantGetUserBalance         = errors.New("can't get user balance")
 	ErrOrderRegisteredToOtherUser = errors.New("order registered to other user")
 	ErrOrderAlreadyRegistered     = errors.New("order already registered")
+	ErrInsufficientBalance        = errors.New("insufficient balance")
 )

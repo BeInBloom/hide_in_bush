@@ -342,3 +342,69 @@ func (p *PqsqlStorage) AddAccrualToBalance(ctx context.Context, userID string, a
 
 	return nil
 }
+
+func (p *PqsqlStorage) CreateWithdrawal(ctx context.Context, userID string, withdrawal models.Withdrawal) error {
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	var currentBalance float64
+	err = tx.QueryRowContext(ctx, `SELECT current_balance FROM balances WHERE user_id = $1`, userID).Scan(&currentBalance)
+	if err != nil {
+		return fmt.Errorf("failed to get balance: %w", err)
+	}
+
+	if currentBalance < withdrawal.Sum {
+		return storage.ErrInsufficientBalance
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO withdrawals (user_id, order_id, sum, processed_at)
+		VALUES ($1, $2, $3, $4)`,
+		userID, withdrawal.Order, withdrawal.Sum, withdrawal.ProcessedAt)
+	if err != nil {
+		return fmt.Errorf("failed to create withdrawal: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		UPDATE balances 
+		SET current_balance = current_balance - $2, withdrawn = withdrawn + $2
+		WHERE user_id = $1`,
+		userID, withdrawal.Sum)
+	if err != nil {
+		return fmt.Errorf("failed to update balance: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+func (p *PqsqlStorage) GetUserWithdrawals(ctx context.Context, userID string) ([]models.Withdrawal, error) {
+	query := `
+	SELECT order_id, sum, processed_at
+	FROM withdrawals
+	WHERE user_id = $1
+	ORDER BY processed_at DESC`
+
+	rows, err := p.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query withdrawals: %w", err)
+	}
+	defer rows.Close()
+
+	var withdrawals []models.Withdrawal
+	for rows.Next() {
+		var w models.Withdrawal
+		if err := rows.Scan(&w.Order, &w.Sum, &w.ProcessedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan withdrawal: %w", err)
+		}
+		withdrawals = append(withdrawals, w)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return withdrawals, nil
+}
